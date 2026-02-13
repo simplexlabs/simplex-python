@@ -10,7 +10,7 @@
       "name": "simplex",
       "description": "Simplex browser automation — CLI reference and workflows for Claude Code",
       "version": "1.0.0",
-      "source": ".",
+      "source": "./plugins/simplex",
       "author": {
         "name": "Simplex",
         "email": "support@simplex.sh"
