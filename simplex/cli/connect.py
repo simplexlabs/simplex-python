@@ -24,19 +24,27 @@ def connect(
         print_error(str(e))
         raise typer.Exit(1)
 
-    # Determine if argument is a URL or session ID
+    # Determine if argument is a URL, workflow ID, or session ID
     if session_id.startswith("http://") or session_id.startswith("https://"):
         logs_url = session_id
     else:
-        # Look up session to get logs_url
+        logs_url = None
+        # Try as workflow ID first (get active session), fall back to session ID
         try:
-            status = client.get_session_status(session_id)
-            logs_url = status.get("logs_url", "")
-            if not logs_url:
-                print_error(f"No logs_url found for session {session_id}")
-                raise typer.Exit(1)
-        except SimplexError as e:
-            print_error(f"Failed to look up session: {e}")
+            result = client.get_workflow_active_session(session_id)
+            logs_url = result.get("logs_url", "")
+        except Exception:
+            pass
+
+        if not logs_url:
+            try:
+                status = client.get_session_status(session_id)
+                logs_url = status.get("logs_url", "")
+            except SimplexError:
+                pass
+
+        if not logs_url:
+            print_error(f"No active session found for '{session_id}'")
             raise typer.Exit(1)
 
     # Derive message_url from logs_url (replace /stream with /message)

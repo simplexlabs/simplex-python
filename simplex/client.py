@@ -597,6 +597,21 @@ class SimplexClient:
         """
         return self._http_client.post_to_url(message_url, json_data={"message": message})
 
+    def get_workflow_active_session(self, workflow_id: str) -> dict:
+        """
+        Get the active session for a workflow.
+
+        Returns session_id, logs_url, message_url, vnc_url for the most
+        recent session associated with the given workflow.
+
+        Args:
+            workflow_id: The workflow ID to look up
+
+        Returns:
+            Dict with session_id, status, logs_url, message_url, vnc_url
+        """
+        return self._http_client.get(f"/workflow/{workflow_id}/active_session")
+
     def close_session(self, session_id: str) -> Any:
         """
         Close a workflow session.
