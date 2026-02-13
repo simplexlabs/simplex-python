@@ -1,4 +1,4 @@
-"""Editor command — create a workflow + editor session, then auto-connect."""
+"""Editor command — create a workflow + editor session."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from rich.panel import Panel
 from rich.text import Text
 
 from simplex.cli.config import make_client_kwargs, save_current_session
-from simplex.cli.connect import _render_event
 from simplex.cli.output import console, print_error
 from simplex.cli.variables import parse_variables
 
@@ -19,9 +18,9 @@ def editor(
     name: str = typer.Option(..., "--name", "-n", help="Workflow name"),
     url: str = typer.Option(..., "--url", "-u", help="Starting URL"),
     vars_json: Optional[str] = typer.Option(None, "--vars", help="Variables as JSON string or path to .json file"),
-    json_output: bool = typer.Option(False, "--json", help="Output raw JSON events (for piping)"),
+    json_output: bool = typer.Option(False, "--json", help="Output session info as JSON"),
 ) -> None:
-    """Create a workflow and start an editor session, then stream events."""
+    """Create a workflow and start an editor session."""
     from simplex import SimplexClient, SimplexError
 
     test_data = parse_variables(vars_json=vars_json)
@@ -83,32 +82,10 @@ def editor(
 
         panel = Panel(
             info,
-            title=f"[bold green]Session Started[/bold green]",
-            subtitle="[dim]Ctrl+C to disconnect[/dim]",
+            title="[bold green]Session Started[/bold green]",
+            subtitle="[dim]Use 'simplex send' and 'simplex connect'[/dim]",
             border_style="green",
             padding=(1, 2),
         )
         console.print(panel)
         console.print()
-
-    if not logs_url:
-        print_error("No logs_url returned — cannot stream events.")
-        raise typer.Exit(1)
-
-    # Auto-connect: stream SSE events
-    if not json_output:
-        console.print("[bold]Streaming events...[/bold]\n")
-
-    try:
-        for event in client.stream_session(logs_url):
-            if json_output:
-                print(json.dumps(event, default=str), flush=True)
-            else:
-                _render_event(event)
-    except KeyboardInterrupt:
-        if not json_output:
-            console.print("\n[yellow]Disconnected.[/yellow]")
-        raise typer.Exit(0)
-    except Exception as e:
-        print_error(f"Stream error: {e}")
-        raise typer.Exit(1)
