@@ -38,6 +38,8 @@ export SIMPLEX_BASE_URL="https://your-custom-api-url.example.com"
 ```bash
 simplex editor --name "My Workflow" --url "https://example.com"
 simplex editor -n "My Workflow" -u "https://example.com" --var key=value
+simplex editor -n "Test" -u "https://example.com" --vars '{"email":"a@b.com","name":"Test"}'
+simplex editor -n "Test" -u "https://example.com" --vars data.json
 simplex editor --name "Test" --url "https://example.com" --json
 ```
 
@@ -46,20 +48,23 @@ simplex editor --name "Test" --url "https://example.com" --json
 | `--name` | `-n` | Yes | Workflow name |
 | `--url` | `-u` | Yes | Starting URL |
 | `--var` | `-v` | No | Test data variable as key=value (repeatable) |
+| `--vars` | | No | Variables as inline JSON string or path to a .json file |
 | `--json` | | No | Output raw JSON events (one per line, for piping) |
 
-Creates a workflow, starts a browser session, and streams live agent events. Prints session info (session_id, workflow_id, vnc_url, logs_url, message_url) then streams SSE events until Ctrl+C.
+Creates a workflow, starts a browser session, and streams live agent events. Shows a panel with the workflow link and prompts to open it in the browser, then streams SSE events until Ctrl+C. The session is pinned as the current session for `simplex send` and `simplex connect`.
 
 ### `simplex connect` — Stream events from a running session
 
 ```bash
-simplex connect <session_id_or_logs_url>
+simplex connect                          # Uses current pinned session
+simplex connect <workflow_id>            # Look up active session by workflow ID
+simplex connect <session_id>             # Connect by session ID
 simplex connect "https://host:port/stream" --json
 ```
 
 | Argument | Description |
 |----------|-------------|
-| `session_id` or URL | Session ID to look up, or a logs_url directly |
+| `session_id`, workflow ID, or URL | Target to connect to (defaults to current pinned session) |
 | `--json` | Output raw JSON events |
 
 ### `simplex run` — Run an existing workflow
@@ -67,23 +72,28 @@ simplex connect "https://host:port/stream" --json
 ```bash
 simplex run <workflow_id>
 simplex run <workflow_id> --var email=test@test.com --watch
+simplex run <workflow_id> --vars '{"email":"test@test.com","zip":"91711"}'
+simplex run <workflow_id> --vars variables.json --watch
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--var` | `-v` | Variable as key=value (repeatable) |
+| `--vars` | | Variables as inline JSON string or path to a .json file |
 | `--metadata` | `-m` | Metadata string |
 | `--webhook-url` | | Webhook URL for status updates |
 | `--watch` | `-w` | Poll until completion |
 
+When both `--var` and `--vars` are provided, they are merged. Individual `--var` values take precedence on conflict.
+
 ### `simplex send` — Send a message to a running session
 
 ```bash
-simplex send <session_id> "Click the login button"
-simplex send <session_id> "Fill in the email field with test@test.com"
+simplex send "Click the login button"                   # Uses current pinned session
+simplex send "Fill in the email" <workflow_or_session_id>
 ```
 
-Sends a message to the browser agent in a running session. Useful for giving instructions to an editor session.
+Sends a message to the browser agent in a running session. Defaults to the current pinned session (set by `simplex editor`).
 
 ### `simplex pause` / `simplex resume`
 
@@ -99,6 +109,15 @@ simplex workflows list --name "search term"
 simplex workflows list --metadata "filter"
 ```
 
+### `simplex workflows vars` — Show variable schema for a workflow
+
+```bash
+simplex workflows vars <workflow_id>
+simplex workflows vars <workflow_id> --json
+```
+
+Displays a table of the workflow's variable definitions including name, type, whether it's required, default value, and allowed enum values. Also prints an example run command with the required variables.
+
 ### `simplex sessions status` / `logs` / `download` / `replay`
 
 ```bash
@@ -111,10 +130,27 @@ simplex sessions replay <session_id> --output replay.mp4
 ### `simplex login` / `whoami` / `logout`
 
 ```bash
-simplex login       # Prompts for API key, saves to ~/.simplex/credentials
+simplex login       # Prompts for API key (masked with *), saves to ~/.simplex/credentials
 simplex whoami      # Shows current auth status
 simplex logout      # Removes saved credentials
 ```
+
+## Variable Input Formats
+
+Variables can be passed in three ways (can be combined):
+
+```bash
+# Individual key=value pairs
+simplex run <id> --var email=test@test.com --var zip=91711
+
+# Inline JSON
+simplex run <id> --vars '{"email":"test@test.com","zip":"91711","count":5}'
+
+# JSON file
+simplex run <id> --vars my-variables.json
+```
+
+JSON input preserves types (numbers, booleans, arrays, objects), while `--var` always passes strings. Use `--vars` for complex data or many variables.
 
 ## Python SDK
 
@@ -133,9 +169,9 @@ client = SimplexClient(api_key="your-key", base_url="https://custom-url.com")
 result = client.create_workflow(name="My Workflow", url="https://example.com")
 workflow_id = result["workflow"]["id"]
 
-# Get a workflow
+# Get a workflow (includes variable definitions)
 workflow = client.get_workflow(workflow_id)
-# Returns: {"succeeded": true, "workflow": {"id": "...", "name": "...", ...}}
+# Returns: {"succeeded": true, "workflow": {"id": "...", "name": "...", "variables": [...], ...}}
 
 # Update a workflow
 client.update_workflow(workflow_id, name="New Name", url="https://new-url.com")
@@ -198,6 +234,10 @@ client.get_session_status(session_id)
 client.retrieve_session_logs(session_id)      # Returns parsed logs (None if still running)
 client.download_session_files(session_id)       # Returns bytes (zip)
 client.retrieve_session_replay(session_id)      # Returns bytes (mp4)
+
+# Get active session for a workflow
+client.get_workflow_active_session(workflow_id)
+# Returns: {"session_id": "...", "status": "...", "logs_url": "...", "message_url": "...", "vnc_url": "..."}
 ```
 
 ## SSE Event Format
@@ -206,17 +246,36 @@ Events from `stream_session()` are dicts. The event type is in the `event` key (
 
 | Event | Description | Key Fields |
 |-------|-------------|------------|
+| `RunStarted` | Agent started | `session_id` |
 | `RunContent` | Agent text output | `content`, `content_type`, `session_id` |
 | `ToolCallStarted` | Tool invocation | `tool` (object with `tool_name`, `tool_args`) |
-| `ToolCallCompleted` | Tool result | `tool` (object with `content` result) |
-| `FlowPaused` | Session paused | `pause_key`, `pause_id` |
+| `ToolCallCompleted` | Tool result | `tool` (object with `content` result, `tool_call_error` bool) |
+| `FlowPaused` | Session paused | `pause_key`, `pause_id`, `pause_type`, `prompt` |
 | `FlowResumed` | Session resumed | `pause_key` |
-| `RunCompleted` | Agent finished | `content`, `session_id` |
+| `RunCompleted` | Agent finished | `content`, `session_id`, `metrics` (with `duration_ms`) |
 | `RunError` | Error occurred | `content` (error message) |
 
 The `message_url` can be derived from `logs_url` by replacing `/stream` with `/message`.
 
 ## Common Patterns
+
+### Pass many variables via JSON file
+```bash
+cat > vars.json << 'EOF'
+{
+  "business_name": "Acme Plumbing",
+  "zip_code": "94103",
+  "email": "contact@acme.com",
+  "annual_revenue": 500000
+}
+EOF
+simplex run <workflow_id> --vars vars.json --watch
+```
+
+### Check what variables a workflow needs before running
+```bash
+simplex workflows vars <workflow_id>
+```
 
 ### Pipe JSON events to another tool
 ```bash
@@ -227,6 +286,14 @@ simplex editor -n "Test" -u "https://example.com" --json | jq '.event'
 ```bash
 simplex editor -n "Test" -u "https://example.com" --json | head -1
 # First line is: {"type": "SessionStarted", "session_id": "...", "logs_url": "...", ...}
+```
+
+### Use current session pinning
+```bash
+simplex editor -n "Test" -u "https://example.com"  # Pins session
+# In another terminal:
+simplex send "Click the login button"               # Uses pinned session
+simplex connect                                       # Uses pinned session
 ```
 
 ### Use in scripts
