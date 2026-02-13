@@ -1,0 +1,6 @@
+# Core dependencies
+requests>=2.25.0
+urllib3>=1.26.0
+
+# Development dependencies (optional)
+# Install with: pip install -r requirements-dev.txt

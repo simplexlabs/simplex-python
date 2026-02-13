@@ -1,0 +1,13 @@
+{
+  "name": "simplex",
+  "version": "1.0.0",
+  "description": "Simplex browser automation — CLI reference and workflows for Claude Code",
+  "author": {
+    "name": "Simplex",
+    "email": "support@simplex.sh"
+  },
+  "homepage": "https://simplex.sh",
+  "repository": "https://github.com/simplexlabs/simplex-python",
+  "license": "MIT",
+  "keywords": ["simplex", "browser", "automation", "workflow", "scraping", "cli"]
+}
