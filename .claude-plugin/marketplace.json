@@ -1,0 +1,10 @@
+{
+  "name": "simplex",
+  "description": "Simplex browser automation plugins for Claude Code",
+  "plugins": [
+    {
+      "name": "simplex",
+      "path": "."
+    }
+  ]
+}
