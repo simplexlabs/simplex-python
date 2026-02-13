@@ -71,11 +71,9 @@ def editor(
         }), flush=True)
     else:
         print_kv([
-            ("Workflow ID", workflow_id),
+            ("Workflow", f"https://simplex.sh/workflow/{workflow_id}"),
             ("Session ID", session_id),
             ("VNC URL", vnc_url),
-            ("Logs URL", logs_url),
-            ("Message URL", message_url or "N/A"),
         ])
         console.print()
         console.print("[bold]Streaming events...[/bold] (Ctrl+C to stop)\n")
