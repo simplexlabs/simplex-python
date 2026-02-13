@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 import typer
 
-from simplex.cli.config import make_client_kwargs
+from simplex.cli.config import make_client_kwargs, save_current_session
 from simplex.cli.connect import _render_event
 from simplex.cli.output import console, print_error, print_kv
 
@@ -55,6 +55,9 @@ def editor(
     vnc_url = result.get("vnc_url", "")
     logs_url = result.get("logs_url", "")
     message_url = result.get("message_url", "")
+
+    # Pin this as the current session
+    save_current_session(workflow_id, session_id)
 
     if json_output:
         # Print session info as first JSON line

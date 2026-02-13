@@ -7,16 +7,26 @@ from typing import Optional
 
 import typer
 
-from simplex.cli.config import make_client_kwargs
+from simplex.cli.config import load_current_session, make_client_kwargs
 from simplex.cli.output import console, print_error, print_kv
 
 
 def connect(
-    session_id: str = typer.Argument(help="Session ID or logs_url to connect to"),
+    session_id: Optional[str] = typer.Argument(None, help="Session ID, workflow ID, or logs_url (defaults to current session)"),
     json_output: bool = typer.Option(False, "--json", help="Output raw JSON events (for piping)"),
 ) -> None:
     """Stream live events from a running session."""
     from simplex import SimplexClient, SimplexError
+
+    # Resolve target — use current session if not provided
+    if not session_id:
+        current = load_current_session()
+        if not current:
+            print_error("No target specified and no current session. Start one with 'simplex editor' or pass a session/workflow ID.")
+            raise typer.Exit(1)
+        session_id = current["workflow_id"]
+        if not json_output:
+            console.print(f"[dim]Using current session ({session_id[:8]}...)[/dim]")
 
     try:
         client = SimplexClient(**make_client_kwargs())

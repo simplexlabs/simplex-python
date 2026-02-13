@@ -87,6 +87,28 @@ def get_api_key_source() -> tuple[str, str] | None:
     return None
 
 
+CURRENT_SESSION_FILE = CREDENTIALS_DIR / "current_session"
+
+
+def save_current_session(workflow_id: str, session_id: str) -> None:
+    """Save the active session so send/connect can default to it."""
+    _ensure_credentials_dir()
+    CURRENT_SESSION_FILE.write_text(json.dumps({
+        "workflow_id": workflow_id,
+        "session_id": session_id,
+    }))
+
+
+def load_current_session() -> dict | None:
+    """Load the current session. Returns dict with workflow_id, session_id or None."""
+    if not CURRENT_SESSION_FILE.exists():
+        return None
+    try:
+        return json.loads(CURRENT_SESSION_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 def _mask_key(key: str) -> str:
     if len(key) <= 8:
         return key[:2] + "*" * (len(key) - 2)

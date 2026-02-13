@@ -2,18 +2,29 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import typer
 
-from simplex.cli.config import make_client_kwargs
+from simplex.cli.config import load_current_session, make_client_kwargs
 from simplex.cli.output import console, print_error
 
 
 def send(
-    target: str = typer.Argument(help="Session ID or workflow ID"),
     message: str = typer.Argument(help="Message to send to the browser agent"),
+    target: Optional[str] = typer.Argument(None, help="Session ID or workflow ID (defaults to current session)"),
 ) -> None:
     """Send a message to a running session's browser agent."""
     from simplex import SimplexClient, SimplexError
+
+    # Resolve target — use current session if not provided
+    if not target:
+        current = load_current_session()
+        if not current:
+            print_error("No target specified and no current session. Start one with 'simplex editor' or pass a session/workflow ID.")
+            raise typer.Exit(1)
+        target = current["workflow_id"]
+        console.print(f"[dim]Using current session ({target[:8]}...)[/dim]")
 
     try:
         client = SimplexClient(**make_client_kwargs())
@@ -26,14 +37,11 @@ def send(
     try:
         result = client.get_workflow_active_session(target)
         message_url = result.get("message_url")
-        session_id = result.get("session_id", target)
         if not message_url:
-            # Derive from logs_url
             logs_url = result.get("logs_url", "")
             if logs_url and "/stream" in logs_url:
                 message_url = logs_url.rsplit("/stream", 1)[0] + "/message"
     except Exception:
-        # Not a workflow ID or lookup failed — try as session ID
         try:
             status = client.get_session_status(target)
             logs_url = status.get("logs_url", "")
