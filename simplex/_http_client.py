@@ -220,17 +220,21 @@ class HttpClient:
         """Connect to an SSE endpoint and yield parsed events.
 
         Uses absolute URL (not base_url) since SSE endpoints are on container tunnels.
+        The generator ends cleanly when the connection closes (e.g. session finished).
         """
         import json as json_module
 
         response = self.session.get(url, stream=True, timeout=None)
         response.raise_for_status()
-        for line in response.iter_lines(decode_unicode=True):
-            if line and line.startswith("data: "):
-                try:
-                    yield json_module.loads(line[6:])
-                except json_module.JSONDecodeError:
-                    continue
+        try:
+            for line in response.iter_lines(decode_unicode=True):
+                if line and line.startswith("data: "):
+                    try:
+                        yield json_module.loads(line[6:])
+                    except json_module.JSONDecodeError:
+                        continue
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError):
+            return  # Connection closed — session ended
 
     def post_to_url(self, url: str, json_data: dict) -> Any:
         """POST JSON to an absolute URL (not relative to base_url)."""
