@@ -151,7 +151,7 @@ results = client.search_workflows(workflow_name="search term")
 
 ```python
 # Start an editor session (creates workflow + browser session)
-# NOTE: Takes 30-40 seconds. Use timeout=120.
+# NOTE: Takes 10-15 seconds. Use timeout=120.
 result = client.start_editor_session(
     name="My Session",
     url="https://example.com",

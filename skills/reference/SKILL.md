@@ -146,7 +146,7 @@ result = client.start_editor_session(
     test_data={"username": "test"},  # optional variables
 )
 # Returns: succeeded, workflow_id, session_id, vnc_url, logs_url, message_url, filesystem_url
-# NOTE: This call takes 30-40 seconds. Use timeout=120 on the client.
+# NOTE: This call takes 10-15 seconds. Use timeout=120 on the client.
 
 # Stream live SSE events
 for event in client.stream_session(result["logs_url"]):
@@ -228,6 +228,6 @@ from simplex import SimplexClient
 client = SimplexClient(
     api_key=os.environ["SIMPLEX_API_KEY"],
     base_url=os.environ.get("SIMPLEX_BASE_URL", "https://api.simplex.sh"),
-    timeout=120,  # Important: editor sessions take 30-40s to start
+    timeout=120,  # Important: editor sessions take 10-15s to start
 )
 ```

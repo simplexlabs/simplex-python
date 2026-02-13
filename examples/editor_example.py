@@ -16,7 +16,7 @@ from simplex import SimplexClient, SimplexError
 def main() -> None:
     client = SimplexClient(
         api_key=os.environ["SIMPLEX_API_KEY"],
-        timeout=120,  # Editor sessions take 30-40s to start
+        timeout=120,  # Editor sessions take 10-15s to start
     )
 
     try:
