@@ -6,9 +6,11 @@ import json
 from typing import Optional
 
 import typer
+from rich.panel import Panel
+from rich.text import Text
 
 from simplex.cli.config import load_current_session, make_client_kwargs
-from simplex.cli.output import console, print_error, print_kv
+from simplex.cli.output import console, print_error
 
 
 def connect(
@@ -57,14 +59,7 @@ def connect(
             print_error(f"No active session found for '{session_id}'")
             raise typer.Exit(1)
 
-    # Derive message_url from logs_url (replace /stream with /message)
-    message_url = logs_url.rsplit("/stream", 1)[0] + "/message" if "/stream" in logs_url else None
-
     if not json_output:
-        print_kv([
-            ("Logs URL", logs_url),
-            ("Message URL", message_url or "N/A"),
-        ])
         console.print()
         console.print("[bold]Streaming events...[/bold] (Ctrl+C to stop)\n")
 
@@ -85,64 +80,149 @@ def connect(
         raise typer.Exit(1)
 
 
+# ── Event renderer ────────────────────────────────────────────────────────────
+
+# Track state across events for cleaner rendering
+_last_event_type: str = ""
+
+
 def _render_event(event: dict) -> None:
-    """Render an SSE event as clean, structured log output."""
+    """Render an SSE event as clean, structured terminal output."""
+    global _last_event_type
     event_type = event.get("event") or event.get("type", "")
 
     if event_type == "RunContent":
         content = event.get("content", "")
         if content and content != "SIMPLEX_AGENT_INITIALIZED":
-            console.print(content, end="")
+            # Agent thinking/text — stream inline
+            console.print(content, end="", highlight=False)
+        _last_event_type = event_type
 
     elif event_type == "ToolCallStarted":
         tool = event.get("tool", {})
         tool_name = tool.get("tool_name", "unknown") if isinstance(tool, dict) else "unknown"
         tool_args = tool.get("tool_args", {}) if isinstance(tool, dict) else {}
-        console.print(f"\n  [cyan]{tool_name}[/cyan]", end="")
-        # Show key args inline for common tools
-        if isinstance(tool_args, dict):
-            if "file_path" in tool_args:
-                console.print(f" [dim]{tool_args['file_path']}[/dim]", end="")
-            elif "command" in tool_args:
-                cmd = str(tool_args["command"])[:120]
-                console.print(f" [dim]{cmd}[/dim]", end="")
-            elif "selector" in tool_args:
-                console.print(f" [dim]{tool_args['selector']}[/dim]", end="")
-        console.print()
+
+        # Add spacing after agent text
+        if _last_event_type == "RunContent":
+            console.print()
+
+        # Format tool call with icon and key argument
+        detail = _format_tool_detail(tool_name, tool_args)
+        if detail:
+            console.print(f"  [cyan]>[/cyan] [bold]{tool_name}[/bold] [dim]{detail}[/dim]")
+        else:
+            console.print(f"  [cyan]>[/cyan] [bold]{tool_name}[/bold]")
+
+        _last_event_type = event_type
 
     elif event_type == "ToolCallCompleted":
-        pass  # Agent text after tool calls is more useful than raw results
+        # Show errors from tool results, skip normal completions
+        tool = event.get("tool", {})
+        if isinstance(tool, dict) and tool.get("tool_call_error"):
+            content = tool.get("content", "")
+            if content:
+                console.print(f"    [red]error: {str(content)[:200]}[/red]")
+        _last_event_type = event_type
 
     elif event_type == "FlowPaused":
+        if _last_event_type == "RunContent":
+            console.print()
         pause_type = event.get("pause_type", "")
-        console.print(f"\n[bold yellow]Paused[/bold yellow] ({pause_type})")
         prompt = event.get("prompt", "")
+        panel_content = Text()
         if prompt:
-            console.print(f"  {prompt}")
-        console.print("[dim]Use 'simplex send <session_id> \"message\"' to respond.[/dim]")
+            panel_content.append(prompt)
+            panel_content.append("\n\n")
+        panel_content.append("Use ", style="dim")
+        panel_content.append("simplex send \"message\"", style="bold")
+        panel_content.append(" to respond.", style="dim")
+        console.print()
+        console.print(Panel(
+            panel_content,
+            title="[bold yellow]Paused[/bold yellow]" + (f" ({pause_type})" if pause_type else ""),
+            border_style="yellow",
+            padding=(0, 2),
+        ))
+        _last_event_type = event_type
+
+    elif event_type == "FlowResumed":
+        console.print("[green]Resumed[/green]\n")
+        _last_event_type = event_type
 
     elif event_type in ("RunCompleted", "RunFinished"):
+        if _last_event_type == "RunContent":
+            console.print()
         metrics = event.get("metrics", {})
         duration = metrics.get("duration_ms", 0) / 1000 if metrics else 0
         succeeded = event.get("succeeded", None)
+
         if succeeded is False:
-            console.print(f"\n[bold red]Failed[/bold red]", end="")
+            status = "[bold red]Failed[/bold red]"
         else:
-            console.print(f"\n[bold green]Completed[/bold green]", end="")
-        if duration:
-            console.print(f" [dim]({duration:.1f}s)[/dim]")
-        else:
-            console.print()
+            status = "[bold green]Completed[/bold green]"
+
+        duration_str = f" in {duration:.1f}s" if duration else ""
+        console.print(f"\n{status}{duration_str}")
+        _last_event_type = event_type
 
     elif event_type == "RunError":
+        if _last_event_type == "RunContent":
+            console.print()
         error = event.get("error", event.get("content", ""))
         console.print(f"\n[bold red]Error:[/bold red] {error}")
+        _last_event_type = event_type
 
     elif event_type == "RunStarted":
-        console.print("[dim]Agent running...[/dim]")
+        console.print("[dim]Agent started[/dim]\n")
+        _last_event_type = event_type
 
     elif event_type in ("NewMessage", "AgentRunning"):
         pass  # Internal events, skip
 
     else:
-        console.print(f"[dim][{event_type}][/dim]")
+        # Show unknown events dimmed so nothing gets silently lost
+        if event_type:
+            console.print(f"[dim][{event_type}][/dim]")
+        _last_event_type = event_type
+
+
+def _format_tool_detail(tool_name: str, tool_args: dict) -> str:
+    """Extract the most useful argument to show inline for a tool call."""
+    if not isinstance(tool_args, dict):
+        return ""
+
+    # File operations — show the path
+    if "file_path" in tool_args:
+        return tool_args["file_path"]
+
+    # Shell commands — show the command (truncated)
+    if "command" in tool_args:
+        cmd = str(tool_args["command"])
+        return cmd[:120] + ("..." if len(cmd) > 120 else "")
+
+    # Browser actions — show selector or description
+    if "selector" in tool_args:
+        return tool_args["selector"]
+    if "description" in tool_args:
+        return str(tool_args["description"])[:100]
+
+    # URL-based tools
+    if "url" in tool_args:
+        return str(tool_args["url"])[:120]
+
+    # Text/content tools
+    if "text" in tool_args:
+        text = str(tool_args["text"])
+        return text[:80] + ("..." if len(text) > 80 else "")
+
+    # Search/pattern
+    if "pattern" in tool_args:
+        return tool_args["pattern"]
+
+    # Generic: show first string arg
+    for v in tool_args.values():
+        if isinstance(v, str) and len(v) > 2:
+            return v[:100]
+
+    return ""

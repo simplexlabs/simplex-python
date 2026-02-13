@@ -9,25 +9,13 @@ import typer
 
 from simplex.cli.config import make_client_kwargs
 from simplex.cli.output import console, print_error, print_json, print_kv, print_success
-
-
-def _parse_variables(var_list: list[str] | None) -> dict[str, Any] | None:
-    """Parse --var key=value pairs into a dict."""
-    if not var_list:
-        return None
-    variables: dict[str, Any] = {}
-    for item in var_list:
-        if "=" not in item:
-            print_error(f"Invalid variable format: '{item}'. Use key=value.")
-            raise typer.Exit(1)
-        key, value = item.split("=", 1)
-        variables[key] = value
-    return variables
+from simplex.cli.variables import parse_variables
 
 
 def run(
     workflow_id: str = typer.Argument(help="Workflow ID to run"),
     var: Optional[list[str]] = typer.Option(None, "--var", "-v", help="Variable as key=value (repeatable)"),
+    vars_json: Optional[str] = typer.Option(None, "--vars", help="Variables as JSON string or path to .json file"),
     metadata: Optional[str] = typer.Option(None, "--metadata", "-m", help="Metadata string"),
     webhook_url: Optional[str] = typer.Option(None, "--webhook-url", help="Webhook URL for status updates"),
     watch: bool = typer.Option(False, "--watch", "-w", help="Poll until completion"),
@@ -35,7 +23,7 @@ def run(
     """Run a workflow."""
     from simplex import SimplexClient, SimplexError
 
-    variables = _parse_variables(var)
+    variables = parse_variables(var_list=var, vars_json=vars_json)
 
     try:
         client = SimplexClient(**make_client_kwargs())
