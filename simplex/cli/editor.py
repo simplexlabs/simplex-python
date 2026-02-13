@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import webbrowser
 from typing import Any, Optional
 
 import typer
@@ -90,11 +89,6 @@ def editor(
             padding=(1, 2),
         )
         console.print(panel)
-
-        # Prompt to open in browser
-        if typer.confirm("Open workflow in browser?", default=True):
-            webbrowser.open(workflow_link)
-
         console.print()
 
     if not logs_url:
