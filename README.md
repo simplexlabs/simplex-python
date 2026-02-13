@@ -59,6 +59,12 @@ simplex run <workflow_id>
 simplex run <workflow_id> --var email=test@test.com --watch
 ```
 
+### `simplex send` — Send a message to a running session
+
+```bash
+simplex send <session_id> "Click the login button"
+```
+
 ### `simplex pause` / `simplex resume`
 
 ```bash

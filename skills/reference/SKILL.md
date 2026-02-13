@@ -76,6 +76,15 @@ simplex run <workflow_id> --var email=test@test.com --watch
 | `--webhook-url` | | Webhook URL for status updates |
 | `--watch` | `-w` | Poll until completion |
 
+### `simplex send` — Send a message to a running session
+
+```bash
+simplex send <session_id> "Click the login button"
+simplex send <session_id> "Fill in the email field with test@test.com"
+```
+
+Sends a message to the browser agent in a running session. Useful for giving instructions to an editor session.
+
 ### `simplex pause` / `simplex resume`
 
 ```bash

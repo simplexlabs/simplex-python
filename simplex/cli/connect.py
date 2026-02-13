@@ -68,44 +68,63 @@ def connect(
 
 
 def _render_event(event: dict) -> None:
-    """Render an SSE event with Rich formatting."""
+    """Render an SSE event as clean, structured log output."""
     event_type = event.get("event") or event.get("type", "")
 
     if event_type == "RunContent":
         content = event.get("content", "")
-        if content:
+        if content and content != "SIMPLEX_AGENT_INITIALIZED":
             console.print(content, end="")
 
     elif event_type == "ToolCallStarted":
-        tool_name = event.get("tool_name", "unknown")
-        args = event.get("arguments", {})
-        console.print(f"\n[dim]--- Tool: {tool_name} ---[/dim]")
-        if args:
-            for k, v in (args.items() if isinstance(args, dict) else []):
-                val = str(v)[:200]
-                console.print(f"  [dim]{k}:[/dim] {val}")
+        tool = event.get("tool", {})
+        tool_name = tool.get("tool_name", "unknown") if isinstance(tool, dict) else "unknown"
+        tool_args = tool.get("tool_args", {}) if isinstance(tool, dict) else {}
+        console.print(f"\n  [cyan]{tool_name}[/cyan]", end="")
+        # Show key args inline for common tools
+        if isinstance(tool_args, dict):
+            if "file_path" in tool_args:
+                console.print(f" [dim]{tool_args['file_path']}[/dim]", end="")
+            elif "command" in tool_args:
+                cmd = str(tool_args["command"])[:120]
+                console.print(f" [dim]{cmd}[/dim]", end="")
+            elif "selector" in tool_args:
+                console.print(f" [dim]{tool_args['selector']}[/dim]", end="")
+        console.print()
 
     elif event_type == "ToolCallCompleted":
-        result = event.get("result", "")
-        if result:
-            text = str(result)[:500]
-            console.print(f"  [green]Result:[/green] {text}")
-        console.print("[dim]---[/dim]\n")
+        pass  # Agent text after tool calls is more useful than raw results
 
     elif event_type == "FlowPaused":
         pause_type = event.get("pause_type", "")
-        console.print(f"\n[bold yellow]Session paused[/bold yellow] ({pause_type})")
+        console.print(f"\n[bold yellow]Paused[/bold yellow] ({pause_type})")
         prompt = event.get("prompt", "")
         if prompt:
-            console.print(f"  Prompt: {prompt}")
+            console.print(f"  {prompt}")
+        console.print("[dim]Use 'simplex send <session_id> \"message\"' to respond.[/dim]")
 
     elif event_type in ("RunCompleted", "RunFinished"):
-        console.print("\n[bold green]Session completed.[/bold green]")
+        metrics = event.get("metrics", {})
+        duration = metrics.get("duration_ms", 0) / 1000 if metrics else 0
+        succeeded = event.get("succeeded", None)
+        if succeeded is False:
+            console.print(f"\n[bold red]Failed[/bold red]", end="")
+        else:
+            console.print(f"\n[bold green]Completed[/bold green]", end="")
+        if duration:
+            console.print(f" [dim]({duration:.1f}s)[/dim]")
+        else:
+            console.print()
 
     elif event_type == "RunError":
-        error = event.get("error", "")
-        console.print(f"\n[bold red]Session error:[/bold red] {error}")
+        error = event.get("error", event.get("content", ""))
+        console.print(f"\n[bold red]Error:[/bold red] {error}")
+
+    elif event_type == "RunStarted":
+        console.print("[dim]Agent running...[/dim]")
+
+    elif event_type in ("NewMessage", "AgentRunning"):
+        pass  # Internal events, skip
 
     else:
-        # Print other event types as-is for visibility
-        console.print(f"[dim][{event_type}][/dim] {json.dumps(event, default=str)[:200]}")
+        console.print(f"[dim][{event_type}][/dim]")

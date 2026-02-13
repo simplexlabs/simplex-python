@@ -47,6 +47,9 @@ Homepage = "https://simplex.sh"
 Documentation = "https://docs.simplex.sh"
 Repository = "https://github.com/simplexlabs/simplex-python"
 
+[tool.setuptools.packages.find]
+include = ["simplex*"]
+
 [tool.mypy]
 python_version = "3.9"
 warn_return_any = true

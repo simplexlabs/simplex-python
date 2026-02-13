@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from simplex.cli import auth, connect, editor, run
+from simplex.cli import auth, connect, editor, run, send
 from simplex.cli.sessions import app as sessions_app
 from simplex.cli.workflows import app as workflows_app
 
@@ -43,6 +43,7 @@ app.command("pause")(run.pause)
 app.command("resume")(run.resume)
 app.command("connect")(connect.connect)
 app.command("editor")(editor.editor)
+app.command("send")(send.send)
 
 if __name__ == "__main__":
     app()
