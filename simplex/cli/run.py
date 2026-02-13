@@ -14,7 +14,6 @@ from simplex.cli.variables import parse_variables
 
 def run(
     workflow_id: str = typer.Argument(help="Workflow ID to run"),
-    var: Optional[list[str]] = typer.Option(None, "--var", "-v", help="Variable as key=value (repeatable)"),
     vars_json: Optional[str] = typer.Option(None, "--vars", help="Variables as JSON string or path to .json file"),
     metadata: Optional[str] = typer.Option(None, "--metadata", "-m", help="Metadata string"),
     webhook_url: Optional[str] = typer.Option(None, "--webhook-url", help="Webhook URL for status updates"),
@@ -23,7 +22,7 @@ def run(
     """Run a workflow."""
     from simplex import SimplexClient, SimplexError
 
-    variables = parse_variables(var_list=var, vars_json=vars_json)
+    variables = parse_variables(vars_json=vars_json)
 
     try:
         client = SimplexClient(**make_client_kwargs())

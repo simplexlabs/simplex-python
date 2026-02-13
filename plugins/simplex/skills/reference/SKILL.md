@@ -37,7 +37,6 @@ export SIMPLEX_BASE_URL="https://your-custom-api-url.example.com"
 
 ```bash
 simplex editor --name "My Workflow" --url "https://example.com"
-simplex editor -n "My Workflow" -u "https://example.com" --var key=value
 simplex editor -n "Test" -u "https://example.com" --vars '{"email":"a@b.com","name":"Test"}'
 simplex editor -n "Test" -u "https://example.com" --vars data.json
 simplex editor --name "Test" --url "https://example.com" --json
@@ -47,7 +46,6 @@ simplex editor --name "Test" --url "https://example.com" --json
 |------|-------|----------|-------------|
 | `--name` | `-n` | Yes | Workflow name |
 | `--url` | `-u` | Yes | Starting URL |
-| `--var` | `-v` | No | Test data variable as key=value (repeatable) |
 | `--vars` | | No | Variables as inline JSON string or path to a .json file |
 | `--json` | | No | Output raw JSON events (one per line, for piping) |
 
@@ -71,20 +69,16 @@ simplex connect "https://host:port/stream" --json
 
 ```bash
 simplex run <workflow_id>
-simplex run <workflow_id> --var email=test@test.com --watch
-simplex run <workflow_id> --vars '{"email":"test@test.com","zip":"91711"}'
+simplex run <workflow_id> --vars '{"email":"test@test.com","zip":"91711"}' --watch
 simplex run <workflow_id> --vars variables.json --watch
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--var` | `-v` | Variable as key=value (repeatable) |
 | `--vars` | | Variables as inline JSON string or path to a .json file |
 | `--metadata` | `-m` | Metadata string |
 | `--webhook-url` | | Webhook URL for status updates |
 | `--watch` | `-w` | Poll until completion |
-
-When both `--var` and `--vars` are provided, they are merged. Individual `--var` values take precedence on conflict.
 
 ### `simplex send` — Send a message to a running session
 
@@ -137,20 +131,15 @@ simplex logout      # Removes saved credentials
 
 ## Variable Input Formats
 
-Variables can be passed in three ways (can be combined):
+Variables are passed via `--vars` as inline JSON or a file path:
 
 ```bash
-# Individual key=value pairs
-simplex run <id> --var email=test@test.com --var zip=91711
-
-# Inline JSON
-simplex run <id> --vars '{"email":"test@test.com","zip":"91711","count":5}'
+# Inline JSON — supports objects, arrays, numbers, booleans
+simplex run <id> --vars '{"email":"test@test.com","count":5,"address":{"street":"742 Market St","city":"SF"}}'
 
 # JSON file
 simplex run <id> --vars my-variables.json
 ```
-
-JSON input preserves types (numbers, booleans, arrays, objects), while `--var` always passes strings. Use `--vars` for complex data or many variables.
 
 ## Python SDK
 

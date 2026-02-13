@@ -19,14 +19,13 @@ from simplex.cli.variables import parse_variables
 def editor(
     name: str = typer.Option(..., "--name", "-n", help="Workflow name"),
     url: str = typer.Option(..., "--url", "-u", help="Starting URL"),
-    var: Optional[list[str]] = typer.Option(None, "--var", "-v", help="Test data variable as key=value (repeatable)"),
     vars_json: Optional[str] = typer.Option(None, "--vars", help="Variables as JSON string or path to .json file"),
     json_output: bool = typer.Option(False, "--json", help="Output raw JSON events (for piping)"),
 ) -> None:
     """Create a workflow and start an editor session, then stream events."""
     from simplex import SimplexClient, SimplexError
 
-    test_data = parse_variables(var_list=var, vars_json=vars_json)
+    test_data = parse_variables(vars_json=vars_json)
 
     try:
         client = SimplexClient(**make_client_kwargs())
