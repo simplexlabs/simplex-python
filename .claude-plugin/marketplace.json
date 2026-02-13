@@ -1,10 +1,22 @@
 {
   "name": "simplex",
   "description": "Simplex browser automation plugins for Claude Code",
+  "owner": {
+    "name": "Simplex",
+    "email": "support@simplex.sh"
+  },
   "plugins": [
     {
       "name": "simplex",
-      "path": "."
+      "description": "Simplex browser automation — CLI reference and workflows for Claude Code",
+      "version": "1.0.0",
+      "source": ".",
+      "author": {
+        "name": "Simplex",
+        "email": "support@simplex.sh"
+      },
+      "category": "development",
+      "keywords": ["simplex", "browser", "automation", "workflow", "scraping", "cli"]
     }
   ]
 }
