@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 from rich.panel import Panel
 from rich.text import Text
 
-from simplex.cli.config import load_current_session, make_client_kwargs
+from simplex.cli.config import load_current_session, load_session_by_prefix, make_client_kwargs
 from simplex.cli.output import console, print_error
+
+
+def _derive_message_url(logs_url: str) -> str | None:
+    """Derive the message URL from a logs/stream URL."""
+    if logs_url and "/stream" in logs_url:
+        return logs_url.rsplit("/stream", 1)[0] + "/message"
+    return None
 
 
 def connect(
@@ -20,7 +27,7 @@ def connect(
     """Stream live events from a running session."""
     from simplex import SimplexClient, SimplexError
 
-    # Resolve target — use current session if not provided
+    # Resolve target — use current session if not provided, or match prefix
     if not session_id:
         current = load_current_session()
         if not current:
@@ -29,6 +36,11 @@ def connect(
         session_id = current["workflow_id"]
         if not json_output:
             console.print(f"[dim]Using current session ({session_id[:8]}...)[/dim]")
+    elif not session_id.startswith("http"):
+        # Try prefix match against saved sessions
+        matched = load_session_by_prefix(session_id)
+        if matched:
+            session_id = matched["workflow_id"]
 
     try:
         client = SimplexClient(**make_client_kwargs())
@@ -59,6 +71,8 @@ def connect(
             print_error(f"No active session found for '{session_id}'")
             raise typer.Exit(1)
 
+    message_url = _derive_message_url(logs_url)
+
     if not json_output:
         console.print()
         console.print("[bold]Streaming events...[/bold] (Ctrl+C to stop)\n")
@@ -69,7 +83,12 @@ def connect(
                 print(json.dumps(event), flush=True)
                 continue
 
-            _render_event(event)
+            event_type = event.get("event") or event.get("type", "")
+            if event_type == "AskUserQuestion" and message_url:
+                _render_event(event)
+                _handle_ask_user_interactive(event, client, message_url)
+            else:
+                _render_event(event)
 
     except KeyboardInterrupt:
         if not json_output:
@@ -177,6 +196,41 @@ def _render_event(event: dict) -> None:
         console.print("[dim]Agent started[/dim]\n")
         _last_event_type = event_type
 
+    elif event_type == "AskUserQuestion":
+        if _last_event_type == "RunContent":
+            console.print()
+        data = event.get("data", event)
+        questions = data.get("questions", [])
+        for i, q in enumerate(questions):
+            header = q.get("header", "Question")
+            question_text = q.get("question", "")
+            options = q.get("options", [])
+            multi = q.get("multiSelect", False)
+
+            lines = Text()
+            lines.append(f"{question_text}\n\n")
+            for j, opt in enumerate(options):
+                label = opt.get("label", "")
+                desc = opt.get("description", "")
+                lines.append(f"  [{j + 1}] ", style="bold cyan")
+                lines.append(label)
+                if desc:
+                    lines.append(f" — {desc}", style="dim")
+                lines.append("\n")
+            if multi:
+                lines.append("\nSelect multiple (comma-separated) or type a response:", style="dim")
+            else:
+                lines.append("\nEnter choice or type a response:", style="dim")
+
+            console.print()
+            console.print(Panel(
+                lines,
+                title=f"[bold yellow]{header}[/bold yellow]",
+                border_style="yellow",
+                padding=(0, 2),
+            ))
+        _last_event_type = event_type
+
     elif event_type in ("NewMessage", "AgentRunning"):
         pass  # Internal events, skip
 
@@ -185,6 +239,51 @@ def _render_event(event: dict) -> None:
         if event_type:
             console.print(f"[dim][{event_type}][/dim]")
         _last_event_type = event_type
+
+
+def _handle_ask_user_interactive(event: dict, client: Any, message_url: str) -> None:
+    """Handle an AskUserQuestion event interactively: prompt the user and send the answer back."""
+    data = event.get("data", event)
+    tool_use_id = data.get("tool_use_id", "")
+    questions = data.get("questions", [])
+    answers: dict[str, str] = {}
+
+    for i, q in enumerate(questions):
+        options = q.get("options", [])
+        multi = q.get("multiSelect", False)
+
+        raw = console.input("[bold yellow]> [/bold yellow]").strip()
+        if not raw:
+            continue
+
+        if multi:
+            # Comma-separated numbers or free text
+            parts = [p.strip() for p in raw.split(",")]
+            selected: list[str] = []
+            for part in parts:
+                if part.isdigit() and 1 <= int(part) <= len(options):
+                    selected.append(options[int(part) - 1].get("label", part))
+                else:
+                    selected.append(part)
+            answers[str(i)] = ", ".join(selected)
+        else:
+            if raw.isdigit() and 1 <= int(raw) <= len(options):
+                answers[str(i)] = options[int(raw) - 1].get("label", raw)
+            else:
+                answers[str(i)] = raw
+
+    # Send the answer back
+    answer_payload = json.dumps({
+        "type": "ask_user_answer",
+        "tool_use_id": tool_use_id,
+        "answers": answers,
+    })
+
+    try:
+        client.send_message(message_url, answer_payload)
+        console.print("[green]Answer sent.[/green]\n")
+    except Exception as e:
+        print_error(f"Failed to send answer: {e}")
 
 
 def _format_tool_detail(tool_name: str, tool_args: dict) -> str:

@@ -87,26 +87,64 @@ def get_api_key_source() -> tuple[str, str] | None:
     return None
 
 
-CURRENT_SESSION_FILE = CREDENTIALS_DIR / "current_session"
+SESSIONS_DIR = CREDENTIALS_DIR / "sessions"
 
 
 def save_current_session(workflow_id: str, session_id: str) -> None:
-    """Save the active session so send/connect can default to it."""
-    _ensure_credentials_dir()
-    CURRENT_SESSION_FILE.write_text(json.dumps({
+    """Save a session to ~/.simplex/sessions/<workflow_id>.json."""
+    SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    (SESSIONS_DIR / f"{workflow_id}.json").write_text(json.dumps({
         "workflow_id": workflow_id,
         "session_id": session_id,
     }))
 
 
 def load_current_session() -> dict | None:
-    """Load the current session. Returns dict with workflow_id, session_id or None."""
-    if not CURRENT_SESSION_FILE.exists():
+    """Load the most recently created session from ~/.simplex/sessions/."""
+    if not SESSIONS_DIR.exists():
         return None
-    try:
-        return json.loads(CURRENT_SESSION_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
+    files = sorted(SESSIONS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    for f in files:
+        try:
+            return json.loads(f.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+    return None
+
+
+def load_session_by_prefix(prefix: str) -> dict | None:
+    """Load a session whose workflow_id starts with the given prefix."""
+    if not SESSIONS_DIR.exists():
         return None
+    for f in SESSIONS_DIR.glob("*.json"):
+        if f.stem.startswith(prefix):
+            try:
+                return json.loads(f.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+    return None
+
+
+def list_sessions() -> list[dict]:
+    """List all saved sessions, most recent first."""
+    if not SESSIONS_DIR.exists():
+        return []
+    sessions = []
+    for f in sorted(SESSIONS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        try:
+            sessions.append(json.loads(f.read_text()))
+        except (json.JSONDecodeError, OSError):
+            continue
+    return sessions
+
+
+def remove_session(workflow_id: str) -> bool:
+    """Remove a saved session file."""
+    f = SESSIONS_DIR / f"{workflow_id}.json"
+    if f.exists():
+        f.unlink()
+        return True
+    return False
 
 
 def _mask_key(key: str) -> str:

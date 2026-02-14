@@ -6,7 +6,7 @@ from typing import Optional
 
 import typer
 
-from simplex.cli.config import load_current_session, make_client_kwargs
+from simplex.cli.config import load_current_session, load_session_by_prefix, make_client_kwargs
 from simplex.cli.output import console, print_error
 
 
@@ -17,7 +17,7 @@ def send(
     """Send a message to a running session's browser agent."""
     from simplex import SimplexClient, SimplexError
 
-    # Resolve target — use current session if not provided
+    # Resolve target — use current session if not provided, or match prefix
     if not target:
         current = load_current_session()
         if not current:
@@ -25,6 +25,11 @@ def send(
             raise typer.Exit(1)
         target = current["workflow_id"]
         console.print(f"[dim]Using current session ({target[:8]}...)[/dim]")
+    else:
+        # Try prefix match against saved sessions
+        matched = load_session_by_prefix(target)
+        if matched:
+            target = matched["workflow_id"]
 
     try:
         client = SimplexClient(**make_client_kwargs())
