@@ -300,6 +300,41 @@ class SimplexClient:
                 session_id=session_id,
             )
 
+    def interrupt(self, session_id: str) -> dict:
+        """
+        Interrupt a running session's agent.
+
+        Sends an interrupt signal that pauses the agent mid-execution.
+        The agent stops its current action and emits an SSE event.
+
+        Args:
+            session_id: The session ID to interrupt
+
+        Returns:
+            dict with interrupt result
+
+        Raises:
+            WorkflowError: If interrupting the session fails
+        """
+        try:
+            response = self._http_client.post(
+                "/editor_interrupt",
+                data={"session_id": session_id},
+            )
+            if not response.get("succeeded"):
+                raise WorkflowError(
+                    response.get("error", "Failed to interrupt session"),
+                    session_id=session_id,
+                )
+            return response
+        except Exception as e:
+            if isinstance(e, WorkflowError):
+                raise
+            raise WorkflowError(
+                f"Failed to interrupt session: {e}",
+                session_id=session_id,
+            )
+
     def pause(self, session_id: str) -> PauseSessionResponse:
         """
         Pause a running session.

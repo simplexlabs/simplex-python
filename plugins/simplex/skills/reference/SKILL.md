@@ -95,6 +95,15 @@ simplex send <workflow_id> "Fill in the email"
 
 The target is resolved via the API: if it doesn't look like a UUID, `search_workflows` is called to match by name.
 
+### `simplex editor-interrupt` — Interrupt a running editor session
+
+```bash
+simplex editor-interrupt "My Workflow"    # By workflow name
+simplex editor-interrupt <workflow_id>    # By workflow ID
+```
+
+Sends an interrupt signal to the editor session's agent, stopping it mid-execution. The agent pauses and emits an SSE event. Accepts workflow name (resolved via API) or workflow ID.
+
 ### `simplex pause` / `simplex resume`
 
 ```bash

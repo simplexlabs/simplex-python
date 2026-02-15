@@ -134,3 +134,42 @@ def resume(
     print_success(f"Session {session_id} resumed.")
     if result.get("pause_type"):
         print_kv([("Pause Type", result["pause_type"])])
+
+
+def editor_interrupt(
+    target: str = typer.Argument(help="Workflow name or ID"),
+) -> None:
+    """Interrupt a running editor session's agent."""
+    from simplex import SimplexClient, SimplexError
+
+    try:
+        client = SimplexClient(**make_client_kwargs())
+    except (SimplexError, ValueError) as e:
+        print_error(str(e))
+        raise typer.Exit(1)
+
+    # Resolve workflow name to ID, then get active session
+    workflow_id = target
+    if len(target) < 32 and "-" not in target:
+        try:
+            result = client.search_workflows(workflow_name=target)
+            workflows = result.get("workflows", [])
+            if workflows:
+                workflow_id = workflows[0]["workflow_id"]
+        except Exception:
+            pass
+
+    # Get the active session ID for this workflow
+    try:
+        active = client.get_workflow_active_session(workflow_id)
+        session_id = active.get("session_id", workflow_id)
+    except Exception:
+        session_id = workflow_id
+
+    try:
+        result = client.interrupt(session_id)
+    except SimplexError as e:
+        print_error(str(e))
+        raise typer.Exit(1)
+
+    print_success(f"Session interrupted.")
