@@ -49,21 +49,22 @@ simplex editor --name "Test" --url "https://example.com" --json
 | `--vars` | | No | Variables as inline JSON string or path to a .json file |
 | `--json` | | No | Output raw JSON events (one per line, for piping) |
 
-Creates a workflow, starts a browser session, and streams live agent events. Shows a panel with the workflow link and prompts to open it in the browser, then streams SSE events until Ctrl+C. The session is pinned as the current session for `simplex send` and `simplex connect`.
+Creates a workflow and starts a browser session. Shows a panel with the workflow link, session ID, and VNC URL, then returns. Use `simplex connect <name>` to stream events and `simplex send <name> "message"` to interact.
 
 ### `simplex connect` — Stream events from a running session
 
 ```bash
-simplex connect                          # Uses current pinned session
-simplex connect <workflow_id>            # Look up active session by workflow ID
-simplex connect <session_id>             # Connect by session ID
+simplex connect "My Workflow"             # Resolve by workflow name (partial match)
+simplex connect <workflow_id>             # Look up active session by workflow ID
 simplex connect "https://host:port/stream" --json
 ```
 
 | Argument | Description |
 |----------|-------------|
-| `session_id`, workflow ID, or URL | Target to connect to (defaults to current pinned session) |
+| `target` | **Required.** Workflow name, workflow ID, or logs URL |
 | `--json` | Output raw JSON events |
+
+The target is resolved via the API: if it doesn't look like a UUID, `search_workflows` is called to match by name.
 
 ### `simplex run` — Run an existing workflow
 
@@ -83,11 +84,16 @@ simplex run <workflow_id> --vars variables.json --watch
 ### `simplex send` — Send a message to a running session
 
 ```bash
-simplex send "Click the login button"                   # Uses current pinned session
-simplex send "Fill in the email" <workflow_or_session_id>
+simplex send "My Workflow" "Click the login button"     # Resolve by name
+simplex send <workflow_id> "Fill in the email"
 ```
 
-Sends a message to the browser agent in a running session. Defaults to the current pinned session (set by `simplex editor`).
+| Argument | Description |
+|----------|-------------|
+| `target` | **Required.** Workflow name or workflow ID |
+| `message` | **Required.** Message to send to the browser agent |
+
+The target is resolved via the API: if it doesn't look like a UUID, `search_workflows` is called to match by name.
 
 ### `simplex pause` / `simplex resume`
 
@@ -99,8 +105,9 @@ simplex resume <session_id>
 ### `simplex workflows list`
 
 ```bash
-simplex workflows list --name "search term"
-simplex workflows list --metadata "filter"
+simplex workflows list                       # List all workflows
+simplex workflows list --name "search term"  # Filter by name
+simplex workflows list --metadata "filter"   # Filter by metadata
 ```
 
 ### `simplex workflows vars` — Show variable schema for a workflow
@@ -165,8 +172,9 @@ workflow = client.get_workflow(workflow_id)
 # Update a workflow
 client.update_workflow(workflow_id, name="New Name", url="https://new-url.com")
 
-# Search workflows
-results = client.search_workflows(workflow_name="search term")
+# List all workflows (no args) or search by name/metadata
+results = client.search_workflows()                          # all workflows
+results = client.search_workflows(workflow_name="search term")  # filter by name
 # Returns: {"succeeded": true, "workflows": [...], "count": N}
 ```
 
@@ -279,7 +287,7 @@ When the browser agent needs user input, it emits an `AskUserQuestion` SSE event
 3. **Read the user's answer** from the tool result. The answer object maps string question indices to the selected option label, e.g. `{"0": "Name field"}`.
 4. **Send the answer back** via `simplex send` or `POST /message`:
    ```bash
-   simplex send '{"type":"ask_user_answer","tool_use_id":"toolu_01BuAY2hQm288WTZhfPqPEnn","answers":{"0":"Name field"}}' <target>
+   simplex send <target> '{"type":"ask_user_answer","tool_use_id":"toolu_01BuAY2hQm288WTZhfPqPEnn","answers":{"0":"Name field"}}'
    ```
    Or with the SDK:
    ```python
@@ -317,23 +325,25 @@ simplex run <workflow_id> --vars vars.json --watch
 simplex workflows vars <workflow_id>
 ```
 
+### Start a session, then connect and interact
+```bash
+simplex editor -n "My Flow" -u "https://example.com"
+# Returns immediately with workflow ID + link
+
+# In another terminal:
+simplex connect "My Flow"                                # Stream live events
+simplex send "My Flow" "Click the login button"          # Send a message
+```
+
+### Get session URLs for programmatic use
+```bash
+simplex editor -n "Test" -u "https://example.com" --json
+# Outputs: {"type": "SessionStarted", "session_id": "...", "workflow_id": "...", "logs_url": "...", ...}
+```
+
 ### Pipe JSON events to another tool
 ```bash
-simplex editor -n "Test" -u "https://example.com" --json | jq '.event'
-```
-
-### Start a session and get the URLs for later use
-```bash
-simplex editor -n "Test" -u "https://example.com" --json | head -1
-# First line is: {"type": "SessionStarted", "session_id": "...", "logs_url": "...", ...}
-```
-
-### Use current session pinning
-```bash
-simplex editor -n "Test" -u "https://example.com"  # Pins session
-# In another terminal:
-simplex send "Click the login button"               # Uses pinned session
-simplex connect                                       # Uses pinned session
+simplex connect "My Flow" --json | jq '.event'
 ```
 
 ### Use in scripts
