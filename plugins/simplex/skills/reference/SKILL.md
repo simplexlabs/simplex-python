@@ -74,6 +74,22 @@ simplex editor-interrupt <workflow_id>    # By workflow ID
 
 Sends an interrupt signal to the editor session's agent, stopping it mid-execution.
 
+### `simplex connect` — Stream live events from a running session
+
+```bash
+simplex connect "My Workflow"                            # By workflow name
+simplex connect <workflow_id>                            # By workflow ID
+simplex connect "https://host:port/stream"               # By logs URL directly
+simplex connect <workflow_id> --json                     # Output raw JSON events
+```
+
+| Argument | Description |
+|----------|-------------|
+| `target` | **Required.** Workflow name, workflow ID, or logs URL |
+| `--json` | Output raw JSON events (one per line, for piping) |
+
+Connects to the session's SSE stream and renders events in the terminal. Handles `AskUserQuestion` events interactively — prompts the user and sends the answer back. Press Ctrl+C to disconnect.
+
 ### `simplex run` — Run an existing workflow
 
 ```bash
@@ -113,12 +129,19 @@ simplex workflows vars <workflow_id> --json
 
 Displays a table of the workflow's variable definitions including name, type, whether it's required, default value, and allowed enum values.
 
+### `simplex workflows update` — Update a workflow's metadata
+
+```bash
+simplex workflows update <workflow_id> --metadata "new-value"
+```
+
 ### `simplex sessions status` / `logs` / `download` / `replay`
 
 ```bash
 simplex sessions status <session_id>
 simplex sessions logs <session_id>
 simplex sessions download <session_id> --filename report.pdf --output ./report.pdf
+simplex sessions download <session_id>                    # Downloads all files as zip
 simplex sessions replay <session_id> --output replay.mp4
 ```
 
@@ -152,6 +175,16 @@ client = SimplexClient(api_key="your-key", timeout=120)
 client = SimplexClient(api_key="your-key", base_url="https://custom-url.com", timeout=120)
 ```
 
+### Constructor Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `api_key` | (required) | Your Simplex API key |
+| `base_url` | `"https://api.simplex.sh"` | API base URL |
+| `timeout` | `30` | Request timeout in seconds. **Use 120 for editor sessions.** |
+| `max_retries` | `3` | Max retry attempts for 429/5xx errors |
+| `retry_delay` | `1.0` | Base delay between retries (exponential backoff) |
+
 ### Workflow Management
 
 ```python
@@ -166,9 +199,13 @@ workflow = client.get_workflow(workflow_id)
 # Update a workflow
 client.update_workflow(workflow_id, name="New Name", url="https://new-url.com")
 
+# Update workflow metadata only
+client.update_workflow_metadata(workflow_id, metadata="new-metadata")
+
 # List all workflows (no args) or search by name/metadata
 results = client.search_workflows()                          # all workflows
 results = client.search_workflows(workflow_name="search term")  # filter by name
+results = client.search_workflows(metadata="filter")            # filter by metadata
 # Returns: {"succeeded": true, "workflows": [...], "count": N}
 ```
 
@@ -189,7 +226,7 @@ message_url = result.get("message_url") or result["logs_url"].rsplit("/stream", 
 client.send_message(message_url, "Click the login button")
 
 # Poll for events (see Polling Events section below)
-result = client.poll_events(result["logs_url"])
+poll = client.poll_events(result["logs_url"])
 
 # Close the session
 client.close_session(result["session_id"])
@@ -222,8 +259,11 @@ client.resume(session_id)
 client.interrupt(session_id)                    # Interrupt editor session agent
 client.close_session(session_id)
 client.get_session_status(session_id)
+# Returns: {"in_progress": bool, "success": bool, "paused": bool, "scraper_outputs": ..., "structured_output": ..., "metadata": ...}
+
 client.retrieve_session_logs(session_id)        # Returns parsed logs (None if still running)
-client.download_session_files(session_id)       # Returns bytes (zip)
+client.download_session_files(session_id)       # Returns bytes (zip of all files)
+client.download_session_files(session_id, filename="report.pdf")  # Returns bytes (single file)
 client.retrieve_session_replay(session_id)      # Returns bytes (mp4)
 
 # Get active session for a workflow
@@ -251,6 +291,21 @@ result = client.poll_events(logs_url, since=0, limit=20)
 
 The `events_url` is derived automatically from `logs_url` by replacing `/stream` with `/events`.
 
+### Streaming Events (SSE)
+
+Use `stream_session()` for a long-lived SSE connection. Yields parsed event dicts as a generator.
+
+```python
+for event in client.stream_session(logs_url):
+    event_type = event.get("event", "")
+    if event_type == "RunContent":
+        print(event.get("content", ""))
+    elif event_type in ("RunCompleted", "RunError"):
+        break
+```
+
+Note: `stream_session` opens a persistent connection. For agents that operate in discrete request-response turns, use `poll_events` instead.
+
 ## Event Format
 
 Events are dicts. The event type is in the `event` key:
@@ -266,6 +321,8 @@ Events are dicts. The event type is in the `event` key:
 | `AskUserQuestion` | Agent needs user input | `data.tool_use_id`, `data.questions[]` (see below) |
 | `RunCompleted` | Agent finished | `content`, `session_id`, `metrics` (with `duration_ms`) |
 | `RunError` | Error occurred | `content` (error message) |
+| `NewMessage` | Message boundary | Internal, can be ignored |
+| `AgentRunning` | Agent is active | `running`, `session_id` |
 
 The `message_url` can be derived from `logs_url` by replacing `/stream` with `/message`.
 
@@ -362,6 +419,30 @@ Key points:
 - Save `next_index` from the response and pass it as `since` on the next call
 - Check `get_session_status(session_id)` to see if session is still `in_progress`
 
+## Complete SDK Method Reference
+
+| Method | Args | Returns | Description |
+|--------|------|---------|-------------|
+| `create_workflow(name, url, ...)` | `name` (required), `url`, `actions`, `variables`, `structured_output`, `metadata` | `{"workflow": {"id": ...}}` | Create a new workflow |
+| `get_workflow(workflow_id)` | `workflow_id` | `{"succeeded": true, "workflow": {...}}` | Get workflow details |
+| `update_workflow(workflow_id, **fields)` | `workflow_id`, kwargs: `name`, `url`, `actions`, `variables`, etc. | Updated workflow | Update workflow fields |
+| `update_workflow_metadata(workflow_id, metadata)` | `workflow_id`, `metadata` | `{"succeeded": true, "message": ...}` | Update metadata only |
+| `search_workflows(workflow_name, metadata)` | Both optional | `{"workflows": [...], "count": N}` | Search/list workflows |
+| `start_editor_session(name, url, test_data)` | `name`, `url`, optional `test_data` dict | `{workflow_id, session_id, vnc_url, logs_url, message_url, filesystem_url}` | Create workflow + editor session |
+| `run_workflow(workflow_id, variables, metadata, webhook_url)` | `workflow_id`, optional `variables` dict, `metadata`, `webhook_url` | `{session_id, vnc_url, logs_url}` | Run existing workflow |
+| `get_session_status(session_id)` | `session_id` | `{in_progress, success, paused, scraper_outputs, structured_output}` | Check session status |
+| `poll_events(logs_url, since, limit)` | `logs_url`, `since` (default 0), `limit` (default 100) | `{events, next_index, total, has_more}` | Poll for session events |
+| `stream_session(logs_url)` | `logs_url` | Generator of event dicts | SSE stream (long-lived) |
+| `send_message(message_url, message)` | `message_url`, `message` string | Response dict | Send message to agent |
+| `get_workflow_active_session(workflow_id)` | `workflow_id` | `{session_id, status, logs_url, message_url, vnc_url}` | Get active session for workflow |
+| `interrupt(session_id)` | `session_id` | `{"succeeded": true}` | Interrupt editor session agent |
+| `pause(session_id)` | `session_id` | `{succeeded, pause_key}` | Pause a session |
+| `resume(session_id)` | `session_id` | `{succeeded, pause_type}` | Resume a paused session |
+| `close_session(session_id)` | `session_id` | Response dict | Close a session |
+| `retrieve_session_logs(session_id)` | `session_id` | Parsed logs or `None` | Get logs (only after completion) |
+| `download_session_files(session_id, filename)` | `session_id`, optional `filename` | `bytes` | Download files (zip or single) |
+| `retrieve_session_replay(session_id)` | `session_id` | `bytes` (mp4) | Download session replay video |
+
 ## Common Patterns
 
 ### Start a session from the CLI, then interact
@@ -371,6 +452,12 @@ simplex editor -n "My Flow" -u "https://example.com"
 
 simplex send "My Flow" "Click the login button"          # Send a message
 simplex editor-interrupt "My Flow"                       # Stop the agent
+```
+
+### Stream events live from the terminal
+```bash
+simplex connect "My Flow"                                # Rich terminal output
+simplex connect "My Flow" --json | jq '.event'           # Pipe JSON events
 ```
 
 ### Pass many variables via JSON file
@@ -395,4 +482,9 @@ simplex workflows vars <workflow_id>
 ```bash
 simplex editor -n "Test" -u "https://example.com" --json
 # Outputs: {"type": "SessionStarted", "session_id": "...", "workflow_id": "...", "logs_url": "...", ...}
+```
+
+### List all workflows
+```bash
+simplex workflows list
 ```
