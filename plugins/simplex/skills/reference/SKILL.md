@@ -6,7 +6,7 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # Simplex CLI & SDK Reference
 
-Simplex is a browser automation platform. Users define workflows (name + URL + optional variables), then run them as browser sessions controlled by an AI agent. The CLI and Python SDK let you create workflows, start sessions, stream live events, and send messages to the agent.
+Simplex is a browser automation platform. Users define workflows (name + URL + optional variables), then run them as browser sessions controlled by an AI agent. The CLI and Python SDK let you create workflows, start sessions, poll for events, and send messages to the agent.
 
 ## Installation
 
@@ -47,39 +47,9 @@ simplex editor --name "Test" --url "https://example.com" --json
 | `--name` | `-n` | Yes | Workflow name |
 | `--url` | `-u` | Yes | Starting URL |
 | `--vars` | | No | Variables as inline JSON string or path to a .json file |
-| `--json` | | No | Output raw JSON events (one per line, for piping) |
+| `--json` | | No | Output session info as JSON (for programmatic use) |
 
-Creates a workflow and starts a browser session. Shows a panel with the workflow link, session ID, and VNC URL, then returns. Use `simplex connect <name>` to stream events and `simplex send <name> "message"` to interact.
-
-### `simplex connect` — Stream events from a running session
-
-```bash
-simplex connect "My Workflow"             # Resolve by workflow name (partial match)
-simplex connect <workflow_id>             # Look up active session by workflow ID
-simplex connect "https://host:port/stream" --json
-```
-
-| Argument | Description |
-|----------|-------------|
-| `target` | **Required.** Workflow name, workflow ID, or logs URL |
-| `--json` | Output raw JSON events |
-
-The target is resolved via the API: if it doesn't look like a UUID, `search_workflows` is called to match by name.
-
-### `simplex run` — Run an existing workflow
-
-```bash
-simplex run <workflow_id>
-simplex run <workflow_id> --vars '{"email":"test@test.com","zip":"91711"}' --watch
-simplex run <workflow_id> --vars variables.json --watch
-```
-
-| Flag | Short | Description |
-|------|-------|-------------|
-| `--vars` | | Variables as inline JSON string or path to a .json file |
-| `--metadata` | `-m` | Metadata string |
-| `--webhook-url` | | Webhook URL for status updates |
-| `--watch` | `-w` | Poll until completion |
+Creates a workflow and starts a browser session. Returns immediately with workflow ID, session ID, VNC URL, and logs URL.
 
 ### `simplex send` — Send a message to a running session
 
@@ -102,7 +72,22 @@ simplex editor-interrupt "My Workflow"    # By workflow name
 simplex editor-interrupt <workflow_id>    # By workflow ID
 ```
 
-Sends an interrupt signal to the editor session's agent, stopping it mid-execution. The agent pauses and emits an SSE event. Accepts workflow name (resolved via API) or workflow ID.
+Sends an interrupt signal to the editor session's agent, stopping it mid-execution.
+
+### `simplex run` — Run an existing workflow
+
+```bash
+simplex run <workflow_id>
+simplex run <workflow_id> --vars '{"email":"test@test.com","zip":"91711"}' --watch
+simplex run <workflow_id> --vars variables.json --watch
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--vars` | | Variables as inline JSON string or path to a .json file |
+| `--metadata` | `-m` | Metadata string |
+| `--webhook-url` | | Webhook URL for status updates |
+| `--watch` | `-w` | Poll until completion |
 
 ### `simplex pause` / `simplex resume`
 
@@ -126,7 +111,7 @@ simplex workflows vars <workflow_id>
 simplex workflows vars <workflow_id> --json
 ```
 
-Displays a table of the workflow's variable definitions including name, type, whether it's required, default value, and allowed enum values. Also prints an example run command with the required variables.
+Displays a table of the workflow's variable definitions including name, type, whether it's required, default value, and allowed enum values.
 
 ### `simplex sessions status` / `logs` / `download` / `replay`
 
@@ -162,9 +147,9 @@ simplex run <id> --vars my-variables.json
 ```python
 from simplex import SimplexClient
 
-client = SimplexClient(api_key="your-key")
+client = SimplexClient(api_key="your-key", timeout=120)
 # Or with custom base URL:
-client = SimplexClient(api_key="your-key", base_url="https://custom-url.com")
+client = SimplexClient(api_key="your-key", base_url="https://custom-url.com", timeout=120)
 ```
 
 ### Workflow Management
@@ -199,13 +184,12 @@ result = client.start_editor_session(
 # Returns: succeeded, workflow_id, session_id, vnc_url, logs_url, message_url, filesystem_url
 # NOTE: This call takes 10-15 seconds. Use timeout=120 on the client.
 
-# Stream live SSE events
-for event in client.stream_session(result["logs_url"]):
-    event_type = event.get("event") or event.get("type", "")
-    print(f"[{event_type}] {event}")
-
 # Send a message to the agent
-client.send_message(result["message_url"], "Click the login button")
+message_url = result.get("message_url") or result["logs_url"].rsplit("/stream", 1)[0] + "/message"
+client.send_message(message_url, "Click the login button")
+
+# Poll for events (see Polling Events section below)
+result = client.poll_events(result["logs_url"])
 
 # Close the session
 client.close_session(result["session_id"])
@@ -247,16 +231,16 @@ client.get_workflow_active_session(workflow_id)
 # Returns: {"session_id": "...", "status": "...", "logs_url": "...", "message_url": "...", "vnc_url": "..."}
 ```
 
-### Polling Events (Recommended for Agents)
+### Polling Events
 
-Use `poll_events()` instead of `stream_session()` when building agent integrations. It returns a batch of events without maintaining a long-lived SSE connection.
+Use `poll_events()` to check on session progress. Returns a batch of events from the session history.
 
 ```python
 # Get all events from the beginning
 result = client.poll_events(logs_url)
 # Returns: {"events": [...], "next_index": 47, "total": 47, "has_more": False}
 
-# On next poll, only get new events
+# On next poll, only get new events since last check
 result = client.poll_events(logs_url, since=47)
 # Returns: {"events": [...], "next_index": 52, "total": 52, "has_more": False}
 
@@ -265,28 +249,11 @@ result = client.poll_events(logs_url, since=0, limit=20)
 # Returns: {"events": [...], "next_index": 20, "total": 150, "has_more": True}
 ```
 
-**Agent polling pattern:**
-```python
-next_index = 0
-while True:
-    result = client.poll_events(logs_url, since=next_index)
-    for event in result["events"]:
-        event_type = event.get("event", "")
-        if event_type == "AskUserQuestion":
-            # Handle question...
-            pass
-        elif event_type in ("RunCompleted", "RunError"):
-            # Session finished
-            break
-    next_index = result["next_index"]
-    # ... do other work, respond to user, etc.
-```
+The `events_url` is derived automatically from `logs_url` by replacing `/stream` with `/events`.
 
-The `events_url` is derived from `logs_url` by replacing `/stream` with `/events`.
+## Event Format
 
-## SSE Event Format
-
-Events from `stream_session()` are dicts. The event type is in the `event` key (not `type`):
+Events are dicts. The event type is in the `event` key:
 
 | Event | Description | Key Fields |
 |-------|-------------|------------|
@@ -304,7 +271,7 @@ The `message_url` can be derived from `logs_url` by replacing `/stream` with `/m
 
 ### AskUserQuestion Event — Human-in-the-loop Bridge
 
-When the browser agent needs user input, it emits an `AskUserQuestion` SSE event. **When streaming a Simplex session from Claude Code, you MUST bridge this to Claude Code's own `AskUserQuestion` tool so the user can respond interactively.**
+When the browser agent needs user input, it emits an `AskUserQuestion` event. **When monitoring a Simplex session from Claude Code, you MUST bridge this to Claude Code's own `AskUserQuestion` tool so the user can respond interactively.**
 
 #### Event format
 ```json
@@ -329,20 +296,20 @@ When the browser agent needs user input, it emits an `AskUserQuestion` SSE event
 
 #### How to handle in Claude Code
 
-1. **Detect** the `AskUserQuestion` event while iterating over `simplex connect --json` output or SDK `stream_session()`.
+1. **Detect** the `AskUserQuestion` event in `poll_events()` results.
 2. **Call the `AskUserQuestion` tool** with the `questions` array directly from `data.questions`. The schema is identical — pass `questions` as-is.
 3. **Read the user's answer** from the tool result. The answer object maps string question indices to the selected option label, e.g. `{"0": "Name field"}`.
-4. **Send the answer back** via `simplex send` or `POST /message`:
-   ```bash
-   simplex send <target> '{"type":"ask_user_answer","tool_use_id":"toolu_01BuAY2hQm288WTZhfPqPEnn","answers":{"0":"Name field"}}'
-   ```
-   Or with the SDK:
+4. **Send the answer back** via SDK:
    ```python
    client.send_message(message_url, json.dumps({
        "type": "ask_user_answer",
        "tool_use_id": "toolu_01BuAY2hQm288WTZhfPqPEnn",
        "answers": {"0": "Name field"}
    }))
+   ```
+   Or CLI:
+   ```bash
+   simplex send <target> '{"type":"ask_user_answer","tool_use_id":"...","answers":{"0":"Name field"}}'
    ```
 
 #### Key details
@@ -352,7 +319,59 @@ When the browser agent needs user input, it emits an `AskUserQuestion` SSE event
 - Answer keys are string indices (`"0"`, `"1"`) mapping to the selected option `label`
 - Free-text answers work too — if the user picks "Other", send their raw text as the answer value
 
+## How Claude Code Should Monitor Sessions
+
+**Use `poll_events` to check on sessions. Do NOT use long-lived connections or background streaming.**
+
+```python
+from simplex import SimplexClient
+import os, json
+
+client = SimplexClient(api_key=os.environ["SIMPLEX_API_KEY"], timeout=120)
+
+# 1. Start an editor session
+result = client.start_editor_session(name="My Flow", url="https://example.com")
+logs_url = result["logs_url"]
+workflow_id = result["workflow_id"]
+message_url = result.get("message_url") or logs_url.rsplit("/stream", 1)[0] + "/message"
+
+# 2. Send instructions
+client.send_message(message_url, "Fill out the form with test data")
+
+# 3. Poll for events (call this each turn to check progress)
+next_index = 0
+result = client.poll_events(logs_url, since=next_index)
+for event in result["events"]:
+    event_type = event.get("event", "")
+    if event_type == "RunContent":
+        print(event.get("content", ""))
+    elif event_type == "AskUserQuestion":
+        # Bridge to user via AskUserQuestion tool
+        pass
+    elif event_type in ("RunCompleted", "RunError"):
+        print("Session finished")
+next_index = result["next_index"]  # Save for next poll
+
+# 4. Interrupt if needed
+active = client.get_workflow_active_session(workflow_id)
+client.interrupt(active["session_id"])
+```
+
+Key points:
+- `poll_events(logs_url, since=N)` returns only new events since index N
+- Save `next_index` from the response and pass it as `since` on the next call
+- Check `get_session_status(session_id)` to see if session is still `in_progress`
+
 ## Common Patterns
+
+### Start a session from the CLI, then interact
+```bash
+simplex editor -n "My Flow" -u "https://example.com"
+# Returns immediately with workflow ID + link
+
+simplex send "My Flow" "Click the login button"          # Send a message
+simplex editor-interrupt "My Flow"                       # Stop the agent
+```
 
 ### Pass many variables via JSON file
 ```bash
@@ -372,35 +391,8 @@ simplex run <workflow_id> --vars vars.json --watch
 simplex workflows vars <workflow_id>
 ```
 
-### Start a session, then connect and interact
-```bash
-simplex editor -n "My Flow" -u "https://example.com"
-# Returns immediately with workflow ID + link
-
-# In another terminal:
-simplex connect "My Flow"                                # Stream live events
-simplex send "My Flow" "Click the login button"          # Send a message
-```
-
 ### Get session URLs for programmatic use
 ```bash
 simplex editor -n "Test" -u "https://example.com" --json
 # Outputs: {"type": "SessionStarted", "session_id": "...", "workflow_id": "...", "logs_url": "...", ...}
-```
-
-### Pipe JSON events to another tool
-```bash
-simplex connect "My Flow" --json | jq '.event'
-```
-
-### Use in scripts
-```python
-import os
-from simplex import SimplexClient
-
-client = SimplexClient(
-    api_key=os.environ["SIMPLEX_API_KEY"],
-    base_url=os.environ.get("SIMPLEX_BASE_URL", "https://api.simplex.sh"),
-    timeout=120,  # Important: editor sessions take 10-15s to start
-)
 ```
