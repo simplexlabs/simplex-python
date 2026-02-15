@@ -242,6 +242,12 @@ class HttpClient:
         response.raise_for_status()
         return response.json()
 
+    def get_from_url(self, url: str, params: dict | None = None) -> Any:
+        """GET from an absolute URL (not relative to base_url)."""
+        response = self.session.get(url, params=params, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
+
     def download_file(self, path: str, params: dict[str, Any] | None = None) -> bytes:
         """
         Download a file from the API.

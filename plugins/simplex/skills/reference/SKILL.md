@@ -235,9 +235,10 @@ if status["success"]:
 ```python
 client.pause(session_id)
 client.resume(session_id)
+client.interrupt(session_id)                    # Interrupt editor session agent
 client.close_session(session_id)
 client.get_session_status(session_id)
-client.retrieve_session_logs(session_id)      # Returns parsed logs (None if still running)
+client.retrieve_session_logs(session_id)        # Returns parsed logs (None if still running)
 client.download_session_files(session_id)       # Returns bytes (zip)
 client.retrieve_session_replay(session_id)      # Returns bytes (mp4)
 
@@ -245,6 +246,43 @@ client.retrieve_session_replay(session_id)      # Returns bytes (mp4)
 client.get_workflow_active_session(workflow_id)
 # Returns: {"session_id": "...", "status": "...", "logs_url": "...", "message_url": "...", "vnc_url": "..."}
 ```
+
+### Polling Events (Recommended for Agents)
+
+Use `poll_events()` instead of `stream_session()` when building agent integrations. It returns a batch of events without maintaining a long-lived SSE connection.
+
+```python
+# Get all events from the beginning
+result = client.poll_events(logs_url)
+# Returns: {"events": [...], "next_index": 47, "total": 47, "has_more": False}
+
+# On next poll, only get new events
+result = client.poll_events(logs_url, since=47)
+# Returns: {"events": [...], "next_index": 52, "total": 52, "has_more": False}
+
+# Limit batch size
+result = client.poll_events(logs_url, since=0, limit=20)
+# Returns: {"events": [...], "next_index": 20, "total": 150, "has_more": True}
+```
+
+**Agent polling pattern:**
+```python
+next_index = 0
+while True:
+    result = client.poll_events(logs_url, since=next_index)
+    for event in result["events"]:
+        event_type = event.get("event", "")
+        if event_type == "AskUserQuestion":
+            # Handle question...
+            pass
+        elif event_type in ("RunCompleted", "RunError"):
+            # Session finished
+            break
+    next_index = result["next_index"]
+    # ... do other work, respond to user, etc.
+```
+
+The `events_url` is derived from `logs_url` by replacing `/stream` with `/events`.
 
 ## SSE Event Format
 

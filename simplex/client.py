@@ -616,6 +616,28 @@ class SimplexClient:
         """
         return self._http_client.stream_sse(logs_url)
 
+    def poll_events(self, logs_url: str, since: int = 0, limit: int = 100) -> dict:
+        """
+        Poll for session events (non-streaming alternative to stream_session).
+
+        Args:
+            logs_url: The logs_url for the session (the /stream endpoint URL)
+            since: Event index to start from (0 = all events). Use `next_index`
+                   from the response to get only new events on the next call.
+            limit: Max events to return (default 100, max 500)
+
+        Returns:
+            Dict with:
+                events: list of event dicts
+                next_index: index to pass as `since` on next poll
+                total: total events in session history
+                has_more: whether there are more events beyond this batch
+        """
+        # Derive events URL from logs URL: replace /stream with /events
+        events_url = logs_url.rsplit("/stream", 1)[0] + "/events"
+        params = {"since": since, "limit": limit}
+        return self._http_client.get_from_url(events_url, params=params)
+
     def send_message(self, message_url: str, message: str) -> Any:
         """
         Send a message to a live session.
