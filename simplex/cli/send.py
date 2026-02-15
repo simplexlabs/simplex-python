@@ -40,7 +40,7 @@ def send(
             pass
 
     if not message_url:
-        print_error(f"Could not find message URL for '{target}'. Is the session still running?")
+        print_error(f"Could not find message URL for workflow {workflow_id}. Is the session still running?")
         raise typer.Exit(1)
 
     try:

@@ -78,12 +78,13 @@ def vars_command(
     required_vars = [v for v in variables if v.get("required")]
     if required_vars:
         console.print(f"\n[dim]Example:[/dim]")
-        parts = [f"simplex run {workflow_id[:12]}..."]
-        for v in required_vars[:4]:
-            parts.append(f'--var {v["name"]}=...')
+        var_obj = {v["name"]: "..." for v in required_vars[:4]}
+        import json
+        vars_str = json.dumps(var_obj)
+        example = f"simplex run {workflow_id[:12]}... --vars '{vars_str}'"
         if len(required_vars) > 4:
-            parts.append(f"  [dim]# +{len(required_vars) - 4} more required[/dim]")
-        console.print(f"[dim]  {' '.join(parts)}[/dim]")
+            example += f"  # +{len(required_vars) - 4} more required"
+        console.print(f"[dim]  {example}[/dim]")
     console.print()
 
 
