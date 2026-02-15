@@ -9,7 +9,7 @@ import typer
 from rich.panel import Panel
 from rich.text import Text
 
-from simplex.cli.config import load_current_session, load_session_by_prefix, make_client_kwargs
+from simplex.cli.config import make_client_kwargs, resolve_session
 from simplex.cli.output import console, print_error
 
 
@@ -21,26 +21,20 @@ def _derive_message_url(logs_url: str) -> str | None:
 
 
 def connect(
-    session_id: Optional[str] = typer.Argument(None, help="Session ID, workflow ID, or logs_url (defaults to current session)"),
+    target: str = typer.Argument(help="Workflow name, ID, or logs URL"),
     json_output: bool = typer.Option(False, "--json", help="Output raw JSON events (for piping)"),
 ) -> None:
     """Stream live events from a running session."""
     from simplex import SimplexClient, SimplexError
 
-    # Resolve target — use current session if not provided, or match prefix
-    if not session_id:
-        current = load_current_session()
-        if not current:
-            print_error("No target specified and no current session. Start one with 'simplex editor' or pass a session/workflow ID.")
-            raise typer.Exit(1)
-        session_id = current["workflow_id"]
-        if not json_output:
-            console.print(f"[dim]Using current session ({session_id[:8]}...)[/dim]")
-    elif not session_id.startswith("http"):
-        # Try prefix match against saved sessions
-        matched = load_session_by_prefix(session_id)
+    # Resolve target — match by name or ID prefix
+    session_id = target
+    if not target.startswith("http"):
+        matched = resolve_session(target)
         if matched:
             session_id = matched["workflow_id"]
+            if not json_output:
+                console.print(f"[dim]{matched['name']} ({session_id[:8]}...)[/dim]")
 
     try:
         client = SimplexClient(**make_client_kwargs())

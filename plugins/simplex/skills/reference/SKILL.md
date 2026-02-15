@@ -241,10 +241,61 @@ Events from `stream_session()` are dicts. The event type is in the `event` key (
 | `ToolCallCompleted` | Tool result | `tool` (object with `content` result, `tool_call_error` bool) |
 | `FlowPaused` | Session paused | `pause_key`, `pause_id`, `pause_type`, `prompt` |
 | `FlowResumed` | Session resumed | `pause_key` |
+| `AskUserQuestion` | Agent needs user input | `data.tool_use_id`, `data.questions[]` (see below) |
 | `RunCompleted` | Agent finished | `content`, `session_id`, `metrics` (with `duration_ms`) |
 | `RunError` | Error occurred | `content` (error message) |
 
 The `message_url` can be derived from `logs_url` by replacing `/stream` with `/message`.
+
+### AskUserQuestion Event — Human-in-the-loop Bridge
+
+When the browser agent needs user input, it emits an `AskUserQuestion` SSE event. **When streaming a Simplex session from Claude Code, you MUST bridge this to Claude Code's own `AskUserQuestion` tool so the user can respond interactively.**
+
+#### Event format
+```json
+{
+  "event": "AskUserQuestion",
+  "data": {
+    "tool_use_id": "toolu_01BuAY2hQm288WTZhfPqPEnn",
+    "questions": [
+      {
+        "question": "Which form field did you mean?",
+        "header": "Clarify",
+        "options": [
+          {"label": "Name field", "description": "The patient name input"},
+          {"label": "DOB field", "description": "The date of birth input"}
+        ],
+        "multiSelect": false
+      }
+    ]
+  }
+}
+```
+
+#### How to handle in Claude Code
+
+1. **Detect** the `AskUserQuestion` event while iterating over `simplex connect --json` output or SDK `stream_session()`.
+2. **Call the `AskUserQuestion` tool** with the `questions` array directly from `data.questions`. The schema is identical — pass `questions` as-is.
+3. **Read the user's answer** from the tool result. The answer object maps string question indices to the selected option label, e.g. `{"0": "Name field"}`.
+4. **Send the answer back** via `simplex send` or `POST /message`:
+   ```bash
+   simplex send '{"type":"ask_user_answer","tool_use_id":"toolu_01BuAY2hQm288WTZhfPqPEnn","answers":{"0":"Name field"}}' <target>
+   ```
+   Or with the SDK:
+   ```python
+   client.send_message(message_url, json.dumps({
+       "type": "ask_user_answer",
+       "tool_use_id": "toolu_01BuAY2hQm288WTZhfPqPEnn",
+       "answers": {"0": "Name field"}
+   }))
+   ```
+
+#### Key details
+- `questions` is an array (usually 1, max 4)
+- Each question has 2-4 `options`
+- `multiSelect: true` means multiple options can be selected (comma-separated labels)
+- Answer keys are string indices (`"0"`, `"1"`) mapping to the selected option `label`
+- Free-text answers work too — if the user picks "Other", send their raw text as the answer value
 
 ## Common Patterns
 

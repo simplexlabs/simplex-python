@@ -9,7 +9,7 @@ import typer
 from rich.panel import Panel
 from rich.text import Text
 
-from simplex.cli.config import make_client_kwargs, save_current_session
+from simplex.cli.config import make_client_kwargs, save_session
 from simplex.cli.output import console, print_error
 from simplex.cli.variables import parse_variables
 
@@ -53,8 +53,8 @@ def editor(
     logs_url = result.get("logs_url", "")
     message_url = result.get("message_url", "")
 
-    # Pin this as the current session
-    save_current_session(workflow_id, session_id)
+    # Save session for later reference by name
+    save_session(workflow_id, session_id, name=name, url=url)
 
     workflow_link = f"https://simplex.sh/workflow/{workflow_id}"
 

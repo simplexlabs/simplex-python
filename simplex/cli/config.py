@@ -90,38 +90,36 @@ def get_api_key_source() -> tuple[str, str] | None:
 SESSIONS_DIR = CREDENTIALS_DIR / "sessions"
 
 
-def save_current_session(workflow_id: str, session_id: str) -> None:
+def save_session(workflow_id: str, session_id: str, name: str, url: str) -> None:
     """Save a session to ~/.simplex/sessions/<workflow_id>.json."""
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
     (SESSIONS_DIR / f"{workflow_id}.json").write_text(json.dumps({
         "workflow_id": workflow_id,
         "session_id": session_id,
+        "name": name,
+        "url": url,
     }))
 
 
-def load_current_session() -> dict | None:
-    """Load the most recently created session from ~/.simplex/sessions/."""
+def resolve_session(target: str) -> dict | None:
+    """Resolve a target to a saved session.
+
+    Matches against (in order):
+      1. Workflow name (case-insensitive substring)
+      2. Workflow ID prefix
+    """
     if not SESSIONS_DIR.exists():
         return None
-    files = sorted(SESSIONS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
-    for f in files:
-        try:
-            return json.loads(f.read_text())
-        except (json.JSONDecodeError, OSError):
-            continue
-    return None
-
-
-def load_session_by_prefix(prefix: str) -> dict | None:
-    """Load a session whose workflow_id starts with the given prefix."""
-    if not SESSIONS_DIR.exists():
-        return None
-    for f in SESSIONS_DIR.glob("*.json"):
-        if f.stem.startswith(prefix):
-            try:
-                return json.loads(f.read_text())
-            except (json.JSONDecodeError, OSError):
-                continue
+    sessions = list_sessions()
+    # 1. Match by name (case-insensitive substring)
+    target_lower = target.lower()
+    for s in sessions:
+        if target_lower in s.get("name", "").lower():
+            return s
+    # 2. Match by workflow ID prefix
+    for s in sessions:
+        if s.get("workflow_id", "").startswith(target):
+            return s
     return None
 
 
