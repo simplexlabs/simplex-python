@@ -68,11 +68,10 @@ The target is resolved via the API: if it doesn't look like a UUID, `search_work
 ### `simplex editor-interrupt` — Interrupt a running editor session
 
 ```bash
-simplex editor-interrupt "My Workflow"    # By workflow name
-simplex editor-interrupt <workflow_id>    # By workflow ID
+simplex editor-interrupt <workflow_id>
 ```
 
-Sends an interrupt signal to the editor session's agent, stopping it mid-execution.
+Takes a workflow ID, looks up the active session, and sends an interrupt signal to the agent.
 
 ### `simplex connect` — Stream live events from a running session
 
@@ -451,7 +450,7 @@ simplex editor -n "My Flow" -u "https://example.com"
 # Returns immediately with workflow ID + link
 
 simplex send "My Flow" "Click the login button"          # Send a message
-simplex editor-interrupt "My Flow"                       # Stop the agent
+simplex editor-interrupt <workflow_id>                   # Stop the agent
 ```
 
 ### Stream events live from the terminal
