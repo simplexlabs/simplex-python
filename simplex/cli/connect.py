@@ -13,25 +13,6 @@ from simplex.cli.config import make_client_kwargs
 from simplex.cli.output import console, print_error
 
 
-def _resolve_workflow_id(client, target: str, quiet: bool = False) -> str:
-    """Resolve a target (workflow name or ID) to a workflow ID via the API."""
-    if len(target) >= 32 or "-" in target:
-        return target
-
-    try:
-        result = client.search_workflows(workflow_name=target)
-        workflows = result.get("workflows", [])
-        if workflows:
-            wf = workflows[0]
-            if not quiet:
-                console.print(f"[dim]{wf.get('workflow_name', '')} ({wf['workflow_id'][:8]}...)[/dim]")
-            return wf["workflow_id"]
-    except Exception:
-        pass
-
-    return target
-
-
 def _derive_message_url(logs_url: str) -> str | None:
     """Derive the message URL from a logs/stream URL."""
     if logs_url and "/stream" in logs_url:
@@ -40,7 +21,7 @@ def _derive_message_url(logs_url: str) -> str | None:
 
 
 def connect(
-    target: str = typer.Argument(help="Workflow name, ID, or logs URL"),
+    workflow_id: str = typer.Argument(help="Workflow ID or logs URL"),
     json_output: bool = typer.Option(False, "--json", help="Output raw JSON events (for piping)"),
 ) -> None:
     """Stream live events from a running session."""
@@ -52,14 +33,11 @@ def connect(
         print_error(str(e))
         raise typer.Exit(1)
 
-    # Determine if argument is a URL or a workflow name/ID
-    if target.startswith("http://") or target.startswith("https://"):
-        logs_url = target
+    # Determine if argument is a URL or a workflow ID
+    if workflow_id.startswith("http://") or workflow_id.startswith("https://"):
+        logs_url = workflow_id
     else:
         logs_url = None
-        workflow_id = _resolve_workflow_id(client, target, quiet=json_output)
-
-        # Try as workflow ID first (get active session), fall back to session ID
         try:
             result = client.get_workflow_active_session(workflow_id)
             logs_url = result.get("logs_url", "")
@@ -67,14 +45,7 @@ def connect(
             pass
 
         if not logs_url:
-            try:
-                status = client.get_session_status(workflow_id)
-                logs_url = status.get("logs_url", "")
-            except SimplexError:
-                pass
-
-        if not logs_url:
-            print_error(f"No active session found for '{target}'")
+            print_error(f"No active session found for workflow {workflow_id}")
             raise typer.Exit(1)
 
     message_url = _derive_message_url(logs_url)

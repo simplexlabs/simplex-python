@@ -54,21 +54,21 @@ Creates a workflow and starts a browser session. Returns immediately with workfl
 ### `simplex send` — Send a message to a running session
 
 ```bash
-simplex send "My Workflow" "Click the login button"     # Resolve by name
+simplex send <workflow_id> "Click the login button"
 simplex send <workflow_id> "Fill in the email"
 ```
 
 | Argument | Description |
 |----------|-------------|
-| `target` | **Required.** Workflow name or workflow ID |
+| `workflow_id` | **Required.** Workflow ID |
 | `message` | **Required.** Message to send to the browser agent |
 
-The target is resolved via the API: if it doesn't look like a UUID, `search_workflows` is called to match by name.
+Looks up the active session for the workflow and sends the message to the browser agent.
 
-### `simplex editor-interrupt` — Interrupt a running editor session
+### `simplex interrupt` — Interrupt a running editor session
 
 ```bash
-simplex editor-interrupt <workflow_id>
+simplex interrupt <workflow_id>
 ```
 
 Takes a workflow ID, looks up the active session, and sends an interrupt signal to the agent.
@@ -76,18 +76,17 @@ Takes a workflow ID, looks up the active session, and sends an interrupt signal 
 ### `simplex connect` — Stream live events from a running session
 
 ```bash
-simplex connect "My Workflow"                            # By workflow name
-simplex connect <workflow_id>                            # By workflow ID
+simplex connect <workflow_id>
+simplex connect <workflow_id> --json
 simplex connect "https://host:port/stream"               # By logs URL directly
-simplex connect <workflow_id> --json                     # Output raw JSON events
 ```
 
 | Argument | Description |
 |----------|-------------|
-| `target` | **Required.** Workflow name, workflow ID, or logs URL |
+| `workflow_id` | **Required.** Workflow ID or logs URL |
 | `--json` | Output raw JSON events (one per line, for piping) |
 
-Connects to the session's SSE stream and renders events in the terminal. Handles `AskUserQuestion` events interactively — prompts the user and sends the answer back. Press Ctrl+C to disconnect.
+Looks up the active session for the workflow and streams SSE events in the terminal. Handles `AskUserQuestion` events interactively. Press Ctrl+C to disconnect.
 
 ### `simplex run` — Run an existing workflow
 
@@ -449,14 +448,14 @@ Key points:
 simplex editor -n "My Flow" -u "https://example.com"
 # Returns immediately with workflow ID + link
 
-simplex send "My Flow" "Click the login button"          # Send a message
-simplex editor-interrupt <workflow_id>                   # Stop the agent
+simplex send <workflow_id> "Click the login button"       # Send a message
+simplex interrupt <workflow_id>                   # Stop the agent
 ```
 
 ### Stream events live from the terminal
 ```bash
-simplex connect "My Flow"                                # Rich terminal output
-simplex connect "My Flow" --json | jq '.event'           # Pipe JSON events
+simplex connect <workflow_id>                            # Rich terminal output
+simplex connect <workflow_id> --json | jq '.event'       # Pipe JSON events
 ```
 
 ### Pass many variables via JSON file
