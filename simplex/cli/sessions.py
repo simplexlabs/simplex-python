@@ -7,47 +7,10 @@ from typing import Optional
 
 import typer
 
-from simplex.cli.config import list_sessions, make_client_kwargs, remove_session
-from simplex.cli.output import console, print_error, print_json, print_kv, print_success, print_table
+from simplex.cli.config import make_client_kwargs
+from simplex.cli.output import print_error, print_json, print_kv, print_success
 
 app = typer.Typer(help="Inspect sessions.")
-
-
-@app.command("list")
-def list_cmd() -> None:
-    """List saved sessions."""
-    sessions = list_sessions()
-    if not sessions:
-        console.print("[dim]No saved sessions.[/dim]")
-        raise typer.Exit(0)
-
-    rows = []
-    for s in sessions:
-        wid = s.get("workflow_id", "")
-        rows.append([
-            s.get("name", ""),
-            wid[:12],
-            s.get("url", ""),
-        ])
-    print_table(["Name", "Workflow ID", "URL"], rows)
-
-
-@app.command("remove")
-def remove(
-    target: str = typer.Argument(help="Workflow name or ID prefix"),
-) -> None:
-    """Remove a saved session."""
-    from simplex.cli.config import resolve_session
-
-    session = resolve_session(target)
-    if not session:
-        print_error(f"No session matching '{target}'")
-        raise typer.Exit(1)
-
-    wid = session["workflow_id"]
-    name = session.get("name", wid[:8])
-    remove_session(wid)
-    print_success(f"Removed session '{name}' ({wid[:8]}...)")
 
 
 @app.command("status")

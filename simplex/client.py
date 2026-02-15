@@ -380,7 +380,7 @@ class SimplexClient:
         """
         Search workflows by name and/or metadata.
 
-        At least one of workflow_name or metadata must be provided.
+        If no parameters are provided, returns all workflows for the organization.
 
         Args:
             workflow_name: Name of the workflow to search for
@@ -390,7 +390,6 @@ class SimplexClient:
             SearchWorkflowsResponse with matching workflows
 
         Raises:
-            ValueError: If neither workflow_name nor metadata is provided
             WorkflowError: If the search fails
 
         Example:
@@ -398,8 +397,6 @@ class SimplexClient:
             >>> for wf in results["workflows"]:
             ...     print(f"{wf['workflow_name']} ({wf['workflow_id']})")
         """
-        if workflow_name is None and metadata is None:
-            raise ValueError("At least one of workflow_name or metadata must be provided")
 
         params: dict[str, str] = {}
         if workflow_name is not None:

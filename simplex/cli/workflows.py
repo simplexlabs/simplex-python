@@ -18,11 +18,7 @@ def list_workflows(
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Filter by workflow name"),
     metadata: Optional[str] = typer.Option(None, "--metadata", "-m", help="Filter by metadata"),
 ) -> None:
-    """List workflows matching the given filters."""
-    if name is None and metadata is None:
-        print_error("At least one of --name or --metadata is required.")
-        raise typer.Exit(1)
-
+    """List workflows. Shows all workflows if no filters given."""
     from simplex import SimplexClient, SimplexError
 
     try:
@@ -34,15 +30,15 @@ def list_workflows(
 
     workflows = result.get("workflows", [])
     if not workflows:
-        print_error("No workflows found.")
+        console.print("[dim]No workflows found.[/dim]")
         raise typer.Exit(0)
 
     rows = []
     for wf in workflows:
         rows.append([
-            wf.get("workflow_id", ""),
+            wf.get("workflow_id", "")[:12],
             wf.get("workflow_name", ""),
-            wf.get("metadata", ""),
+            wf.get("metadata", "") or "",
         ])
     print_table(["ID", "Name", "Metadata"], rows)
 

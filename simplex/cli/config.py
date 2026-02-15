@@ -87,64 +87,6 @@ def get_api_key_source() -> tuple[str, str] | None:
     return None
 
 
-SESSIONS_DIR = CREDENTIALS_DIR / "sessions"
-
-
-def save_session(workflow_id: str, session_id: str, name: str, url: str) -> None:
-    """Save a session to ~/.simplex/sessions/<workflow_id>.json."""
-    SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    (SESSIONS_DIR / f"{workflow_id}.json").write_text(json.dumps({
-        "workflow_id": workflow_id,
-        "session_id": session_id,
-        "name": name,
-        "url": url,
-    }))
-
-
-def resolve_session(target: str) -> dict | None:
-    """Resolve a target to a saved session.
-
-    Matches against (in order):
-      1. Workflow name (case-insensitive substring)
-      2. Workflow ID prefix
-    """
-    if not SESSIONS_DIR.exists():
-        return None
-    sessions = list_sessions()
-    # 1. Match by name (case-insensitive substring)
-    target_lower = target.lower()
-    for s in sessions:
-        if target_lower in s.get("name", "").lower():
-            return s
-    # 2. Match by workflow ID prefix
-    for s in sessions:
-        if s.get("workflow_id", "").startswith(target):
-            return s
-    return None
-
-
-def list_sessions() -> list[dict]:
-    """List all saved sessions, most recent first."""
-    if not SESSIONS_DIR.exists():
-        return []
-    sessions = []
-    for f in sorted(SESSIONS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
-        try:
-            sessions.append(json.loads(f.read_text()))
-        except (json.JSONDecodeError, OSError):
-            continue
-    return sessions
-
-
-def remove_session(workflow_id: str) -> bool:
-    """Remove a saved session file."""
-    f = SESSIONS_DIR / f"{workflow_id}.json"
-    if f.exists():
-        f.unlink()
-        return True
-    return False
-
-
 def _mask_key(key: str) -> str:
     if len(key) <= 8:
         return key[:2] + "*" * (len(key) - 2)
