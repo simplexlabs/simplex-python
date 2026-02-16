@@ -101,37 +101,67 @@ def _watch_session(client: Any, session_id: str) -> None:
 
 
 def pause(
-    session_id: str = typer.Argument(help="Session ID to pause"),
+    workflow_id: str = typer.Argument(help="Workflow ID"),
 ) -> None:
     """Pause a running session."""
     from simplex import SimplexClient, SimplexError
 
     try:
         client = SimplexClient(**make_client_kwargs())
+    except (SimplexError, ValueError) as e:
+        print_error(str(e))
+        raise typer.Exit(1)
+
+    try:
+        active = client.get_workflow_active_session(workflow_id)
+        session_id = active.get("session_id")
+        if not session_id:
+            print_error(f"No active session found for workflow {workflow_id}")
+            raise typer.Exit(1)
+    except SimplexError as e:
+        print_error(f"Could not find active session: {e}")
+        raise typer.Exit(1)
+
+    try:
         result = client.pause(session_id)
     except SimplexError as e:
         print_error(str(e))
         raise typer.Exit(1)
 
-    print_success(f"Session {session_id} paused.")
+    print_success(f"Session paused.")
     if result.get("pause_key"):
         print_kv([("Pause Key", result["pause_key"])])
 
 
 def resume(
-    session_id: str = typer.Argument(help="Session ID to resume"),
+    workflow_id: str = typer.Argument(help="Workflow ID"),
 ) -> None:
     """Resume a paused session."""
     from simplex import SimplexClient, SimplexError
 
     try:
         client = SimplexClient(**make_client_kwargs())
+    except (SimplexError, ValueError) as e:
+        print_error(str(e))
+        raise typer.Exit(1)
+
+    try:
+        active = client.get_workflow_active_session(workflow_id)
+        session_id = active.get("session_id")
+        if not session_id:
+            print_error(f"No active session found for workflow {workflow_id}")
+            raise typer.Exit(1)
+    except SimplexError as e:
+        print_error(f"Could not find active session: {e}")
+        raise typer.Exit(1)
+
+    try:
         result = client.resume(session_id)
     except SimplexError as e:
         print_error(str(e))
         raise typer.Exit(1)
 
-    print_success(f"Session {session_id} resumed.")
+    print_success(f"Session resumed.")
     if result.get("pause_type"):
         print_kv([("Pause Type", result["pause_type"])])
 

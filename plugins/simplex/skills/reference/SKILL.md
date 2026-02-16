@@ -106,8 +106,8 @@ simplex run <workflow_id> --vars variables.json --watch
 ### `simplex pause` / `simplex resume`
 
 ```bash
-simplex pause <session_id>
-simplex resume <session_id>
+simplex pause <workflow_id>
+simplex resume <workflow_id>
 ```
 
 ### `simplex workflows list`
