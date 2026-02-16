@@ -43,7 +43,7 @@ from simplex.types import (
 )
 from simplex.webhook import WebhookVerificationError, verify_simplex_webhook
 
-__version__ = "3.0.1"
+__version__ = "3.0.2"
 __all__ = [
     "SimplexClient",
     "SimplexError",
