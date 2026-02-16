@@ -1,4 +1,4 @@
-"""Workflow commands: list, update, vars, outputs, set-outputs."""
+"""Workflow commands: list, update, vars, set-vars, outputs, set-outputs."""
 
 from __future__ import annotations
 
@@ -151,6 +151,43 @@ def outputs_command(
     console.print()
 
 
+VALID_VAR_TYPES = {"string", "number", "boolean", "array", "object", "enum"}
+
+
+def _parse_var_field(field_str: str) -> dict:
+    """Parse a variable spec like 'name:type', 'name!:type' (required), or 'name:enum:a,b,c'.
+
+    A trailing '!' on the name marks it as required:
+      email!:string          → required string
+      status:enum:a,b,c      → optional enum
+      count!:number:Total     → required number with description
+    """
+    parts = field_str.split(":", 2)
+    if len(parts) < 2:
+        raise typer.BadParameter(f"Invalid variable format '{field_str}'. Use name:type or name:type:description")
+
+    name = parts[0].strip()
+    ftype = parts[1].strip().lower()
+
+    required = name.endswith("!")
+    if required:
+        name = name[:-1]
+
+    if ftype not in VALID_VAR_TYPES:
+        raise typer.BadParameter(f"Invalid type '{ftype}'. Must be one of: {', '.join(sorted(VALID_VAR_TYPES))}")
+
+    var: dict = {"name": name, "type": ftype, "required": required}
+
+    if len(parts) == 3:
+        extra = parts[2].strip()
+        if ftype == "enum":
+            var["enumValues"] = [v.strip() for v in extra.split(",") if v.strip()]
+        else:
+            var["description"] = extra
+
+    return var
+
+
 def _parse_field(field_str: str) -> dict:
     """Parse a field spec like 'name:type' or 'name:type:description' or 'name:enum:a,b,c'."""
     parts = field_str.split(":", 2)
@@ -236,3 +273,71 @@ def set_outputs(
         print_success(f"Cleared structured outputs for workflow {workflow_id}.")
     else:
         print_success(f"Set {len(schema)} structured output(s) for workflow {workflow_id}.")
+
+
+@app.command("set-vars")
+def set_vars(
+    workflow_id: str = typer.Argument(help="Workflow ID"),
+    field: Optional[List[str]] = typer.Option(None, "--field", "-f", help="Variable as name:type or name!:type (required). Enum: name:enum:val1,val2"),
+    file: Optional[str] = typer.Option(None, "--file", help="JSON file with variable schema"),
+    clear: bool = typer.Option(False, "--clear", help="Clear all variables"),
+    json_output: bool = typer.Option(False, "--json", help="Output raw JSON response"),
+) -> None:
+    """Set the variable schema for a workflow.
+
+    Use '!' after the name to mark a variable as required.
+
+    Examples:
+
+      simplex workflows set-vars <id> --field email!:string --field limit:number
+
+      simplex workflows set-vars <id> --field status:enum:pending,active,closed
+
+      simplex workflows set-vars <id> --field query!:string:"Search query to use"
+
+      simplex workflows set-vars <id> --file vars_schema.json
+
+      simplex workflows set-vars <id> --clear
+    """
+    from simplex import SimplexClient, SimplexError
+
+    if clear and (field or file):
+        print_error("Cannot combine --clear with --field or --file.")
+        raise typer.Exit(1)
+    if field and file:
+        print_error("Cannot combine --field with --file.")
+        raise typer.Exit(1)
+    if not clear and not field and not file:
+        print_error("Provide --field, --file, or --clear.")
+        raise typer.Exit(1)
+
+    if clear:
+        schema: list = []
+    elif file:
+        try:
+            with open(file) as f:
+                schema = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print_error(f"Could not read schema file: {e}")
+            raise typer.Exit(1)
+        if not isinstance(schema, list):
+            print_error("Schema file must contain a JSON array of variable objects.")
+            raise typer.Exit(1)
+    else:
+        schema = [_parse_var_field(f) for f in (field or [])]
+
+    try:
+        client = SimplexClient(**make_client_kwargs())
+        result = client.update_workflow(workflow_id, variables=schema)
+    except SimplexError as e:
+        print_error(str(e))
+        raise typer.Exit(1)
+
+    if json_output:
+        print_json(result)
+        return
+
+    if clear:
+        print_success(f"Cleared variables for workflow {workflow_id}.")
+    else:
+        print_success(f"Set {len(schema)} variable(s) for workflow {workflow_id}.")
