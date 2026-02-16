@@ -38,6 +38,7 @@ class SessionStatusResponse(TypedDict, total=False):
         file_metadata: Metadata for files downloaded during the session
         scraper_outputs: Scraper outputs collected during the session, keyed by output name
         structured_output: Structured output fields from workflow execution (None while in progress)
+        final_message: A summary of what the agent accomplished (None while in progress)
         paused: Whether the session is currently paused
         paused_key: The pause key if the session is paused
     """
@@ -49,6 +50,7 @@ class SessionStatusResponse(TypedDict, total=False):
     file_metadata: list[FileMetadata]
     scraper_outputs: dict[str, Any]
     structured_output: dict[str, Any] | None
+    final_message: str | None
     paused: bool
     paused_key: str
 
