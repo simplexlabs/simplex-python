@@ -127,6 +127,60 @@ simplex workflows vars <workflow_id> --json
 
 Displays a table of the workflow's variable definitions including name, type, whether it's required, default value, and allowed enum values.
 
+### `simplex workflows outputs` — View structured output schema
+
+```bash
+simplex workflows outputs <workflow_id>
+simplex workflows outputs <workflow_id> --json
+```
+
+Displays the structured output fields defined for a workflow — name, type, and description.
+
+### `simplex workflows set-outputs` — Set structured output schema
+
+```bash
+# Add fields inline
+simplex workflows set-outputs <workflow_id> --field title:string --field price:number
+
+# With descriptions (name:type:description)
+simplex workflows set-outputs <workflow_id> \
+  --field "company_name:string:Name of the company" \
+  --field "revenue:number:Annual revenue in USD" \
+  --field "is_public:boolean:Whether publicly traded"
+
+# Enum type (name:enum:value1,value2,value3)
+simplex workflows set-outputs <workflow_id> \
+  --field "status:enum:pending,active,closed" \
+  --field "category:enum:tech,healthcare,finance"
+
+# From a JSON file
+simplex workflows set-outputs <workflow_id> --file schema.json
+
+# Clear all outputs
+simplex workflows set-outputs <workflow_id> --clear
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--field` | `-f` | Field as `name:type` or `name:type:description`. Repeatable. For enum: `name:enum:val1,val2` |
+| `--file` | | Path to a JSON file containing the schema array |
+| `--clear` | | Remove all structured outputs |
+| `--json` | | Output raw JSON response |
+
+**Supported types:** `string`, `number`, `boolean`, `array`, `object`, `enum`
+
+**JSON file format** (same schema as the API):
+```json
+[
+  {"name": "company_name", "type": "string", "description": "Name of the company"},
+  {"name": "revenue", "type": "number", "description": "Annual revenue in USD"},
+  {"name": "is_public", "type": "boolean"},
+  {"name": "status", "type": "enum", "enumValues": ["pending", "active", "closed"]},
+  {"name": "tags", "type": "array"},
+  {"name": "address", "type": "object"}
+]
+```
+
 ### `simplex workflows update` — Update a workflow's metadata
 
 ```bash
@@ -196,6 +250,13 @@ workflow = client.get_workflow(workflow_id)
 
 # Update a workflow
 client.update_workflow(workflow_id, name="New Name", url="https://new-url.com")
+
+# Set structured outputs on a workflow
+client.update_workflow(workflow_id, structured_output=[
+    {"name": "company_name", "type": "string", "description": "Name of the company"},
+    {"name": "revenue", "type": "number"},
+    {"name": "status", "type": "enum", "enumValues": ["pending", "active", "closed"]},
+])
 
 # Update workflow metadata only
 client.update_workflow_metadata(workflow_id, metadata="new-metadata")
@@ -469,6 +530,17 @@ cat > vars.json << 'EOF'
 }
 EOF
 simplex run <workflow_id> --vars vars.json --watch
+```
+
+### Define structured outputs for a workflow
+```bash
+simplex workflows set-outputs <workflow_id> \
+  --field "company_name:string:Name of the company" \
+  --field "revenue:number:Annual revenue in USD" \
+  --field "status:enum:pending,active,closed"
+
+# Verify
+simplex workflows outputs <workflow_id>
 ```
 
 ### Check what variables a workflow needs before running
