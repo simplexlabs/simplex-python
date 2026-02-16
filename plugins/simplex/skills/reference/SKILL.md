@@ -184,6 +184,39 @@ simplex workflows set-outputs <workflow_id> --clear
 ]
 ```
 
+### `simplex workflows set-vars` — Set variable schema for a workflow
+
+```bash
+# Add fields inline (use ! after the name for required)
+simplex workflows set-vars <workflow_id> --field email!:string --field limit:number
+
+# With descriptions (name:type:description)
+simplex workflows set-vars <workflow_id> \
+  --field "query!:string:Search query to use" \
+  --field "max_results:number:Maximum results to return"
+
+# Enum type (name:enum:value1,value2,value3)
+simplex workflows set-vars <workflow_id> \
+  --field "region:enum:us,eu,asia"
+
+# From a JSON file
+simplex workflows set-vars <workflow_id> --file vars_schema.json
+
+# Clear all variables
+simplex workflows set-vars <workflow_id> --clear
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--field` | `-f` | Variable as `name:type` or `name!:type` (required). Repeatable. For enum: `name:enum:val1,val2` |
+| `--file` | | Path to a JSON file containing the variable schema array |
+| `--clear` | | Remove all variables |
+| `--json` | | Output raw JSON response |
+
+**Supported types:** `string`, `number`, `boolean`, `array`, `object`, `enum`
+
+Append `!` to the variable name to mark it as required (e.g. `email!:string`).
+
 ### `simplex workflows update` — Update a workflow's metadata
 
 ```bash
@@ -549,6 +582,17 @@ simplex workflows set-outputs <workflow_id> \
 
 # Verify
 simplex workflows outputs <workflow_id>
+```
+
+### Define variables for a workflow
+```bash
+simplex workflows set-vars <workflow_id> \
+  --field "email!:string:User email address" \
+  --field "zip_code!:string:ZIP code" \
+  --field "plan:enum:basic,pro,enterprise"
+
+# Verify
+simplex workflows vars <workflow_id>
 ```
 
 ### Check what variables a workflow needs before running
