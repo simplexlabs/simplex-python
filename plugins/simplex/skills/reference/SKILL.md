@@ -22,8 +22,11 @@ This installs both the Python SDK (`from simplex import SimplexClient`) and the 
 # Option 1: Environment variable
 export SIMPLEX_API_KEY="your-api-key"
 
-# Option 2: Login command (saves to ~/.simplex/credentials)
+# Option 2: Login command — opens browser (saves to ~/.simplex/credentials)
 simplex login
+
+# Option 3: Direct API key (for CI/headless)
+simplex login --api-key sk-...
 ```
 
 To point at a different environment:
@@ -200,10 +203,15 @@ simplex sessions replay <session_id> --output replay.mp4
 ### `simplex login` / `whoami` / `logout`
 
 ```bash
-simplex login       # Prompts for API key (masked with *), saves to ~/.simplex/credentials
-simplex whoami      # Shows current auth status
-simplex logout      # Removes saved credentials
+simplex login                     # Opens browser for login (recommended)
+simplex login --api-key sk-...    # Direct API key (for CI/headless)
+simplex whoami                    # Shows current auth status
+simplex logout                    # Removes saved credentials
 ```
+
+Opens your browser to log in via your Simplex account. An API key is created
+automatically and saved to `~/.simplex/credentials`. For headless environments
+(CI, SSH), use `--api-key` to provide a key directly.
 
 ## Variable Input Formats
 
