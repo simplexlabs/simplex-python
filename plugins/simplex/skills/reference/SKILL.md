@@ -223,10 +223,38 @@ Append `!` to the variable name to mark it as required (e.g. `email!:string`).
 simplex workflows update <workflow_id> --metadata "new-value"
 ```
 
-### `simplex sessions status` / `logs` / `download` / `replay`
+### `simplex sessions status` — Check session status
 
 ```bash
 simplex sessions status <session_id>
+simplex sessions status <session_id> --watch      # Poll until session completes
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--watch` | `-w` | Poll every 2s until the session finishes (shows spinner) |
+
+Returns: In Progress, Success, Paused, Final Message, Outputs, Structured Output.
+
+### `simplex sessions events` — Poll events for a workflow
+
+```bash
+simplex sessions events <workflow_id>
+simplex sessions events <workflow_id> --since 47
+simplex sessions events <workflow_id> --since 0 --limit 20 --json
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--since` | `-s` | Event index to start from (default 0). Use `next_index` from previous call. |
+| `--limit` | `-l` | Max events to return (default 100) |
+| `--json` | | Output raw JSON (for programmatic use) |
+
+Looks up the active session for the workflow and polls events via `poll_events()`. Returns rendered events plus `Next Index`, `Total`, and `Has More` metadata.
+
+### `simplex sessions logs` / `download` / `replay`
+
+```bash
 simplex sessions logs <session_id>
 simplex sessions download <session_id> --filename report.pdf --output ./report.pdf
 simplex sessions download <session_id>                    # Downloads all files as zip
@@ -478,46 +506,42 @@ When the browser agent needs user input, it emits an `AskUserQuestion` event. **
 
 ## How Claude Code Should Monitor Sessions
 
-**Use `poll_events` to check on sessions. Do NOT use long-lived connections or background streaming.**
+**ALWAYS use the CLI commands. Do NOT write Python scripts, use the Python SDK directly, or use `--watch` flags. Instead, call the CLI commands in a loop yourself.**
 
-```python
-from simplex import SimplexClient
-import os, json
+### Recommended flow
 
-client = SimplexClient(api_key=os.environ["SIMPLEX_API_KEY"], timeout=120)
-
-# 1. Start an editor session
-result = client.start_editor_session(name="My Flow", url="https://example.com")
-logs_url = result["logs_url"]
-workflow_id = result["workflow_id"]
-message_url = result.get("message_url") or logs_url.rsplit("/stream", 1)[0] + "/message"
+```bash
+# 1. Start a session
+simplex editor -n "My Flow" -u "https://example.com" --json
+# Returns: {"session_id": "...", "workflow_id": "...", "logs_url": "...", ...}
 
 # 2. Send instructions
-client.send_message(message_url, "Fill out the form with test data")
+simplex send <workflow_id> "Click the login button"
 
-# 3. Poll for events (call this each turn to check progress)
-next_index = 0
-result = client.poll_events(logs_url, since=next_index)
-for event in result["events"]:
-    event_type = event.get("event", "")
-    if event_type == "RunContent":
-        print(event.get("content", ""))
-    elif event_type == "AskUserQuestion":
-        # Bridge to user via AskUserQuestion tool
-        pass
-    elif event_type in ("RunCompleted", "RunError"):
-        print("Session finished")
-next_index = result["next_index"]  # Save for next poll
+# 3. Poll for events (call repeatedly with --since to get new events)
+simplex sessions events <workflow_id> --json
+simplex sessions events <workflow_id> --since <next_index> --json
 
-# 4. Interrupt if needed
-active = client.get_workflow_active_session(workflow_id)
-client.interrupt(active["session_id"])
+# 4. Check session status
+simplex sessions status <session_id>
+
+# 5. Interrupt if needed
+simplex interrupt <workflow_id>
 ```
 
-Key points:
-- `poll_events(logs_url, since=N)` returns only new events since index N
-- Save `next_index` from the response and pass it as `since` on the next call
-- Check `get_session_status(session_id)` to see if session is still `in_progress`
+### Polling pattern for Claude Code
+
+1. After starting a session or sending a message, call `simplex sessions events <workflow_id> --json` to get events
+2. Parse the JSON output — save `next_index` for the next poll
+3. Check for `RunCompleted` or `RunError` events to know when the session is done
+4. If no terminal event yet, call `simplex sessions status <session_id>` to check `in_progress`
+5. If still in progress, wait a few seconds then poll again with `--since <next_index>`
+6. If an `AskUserQuestion` event appears, bridge it to the user via Claude Code's `AskUserQuestion` tool, then send the answer back with `simplex send`
+
+### Important rules
+- **Do NOT use `--watch`** — it blocks with a spinner and provides no event detail. Poll manually instead.
+- **Do NOT write Python scripts** — use the CLI commands via Bash tool.
+- **Do NOT use `simplex connect`** — it opens a long-lived SSE stream that doesn't work well in Claude Code.
 
 ## Complete SDK Method Reference
 
