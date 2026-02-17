@@ -10,7 +10,7 @@ from typing import Optional
 import typer
 
 from simplex.cli.config import make_client_kwargs
-from simplex.cli.output import console, print_error, print_json, print_kv, print_success
+from simplex.cli.output import console, print_error, print_json, print_kv, print_success, print_table
 
 app = typer.Typer(help="Inspect sessions.")
 
@@ -74,6 +74,8 @@ def _print_status(result: dict) -> None:
     ]
     if result.get("metadata"):
         pairs.append(("Metadata", str(result["metadata"])))
+    if result.get("workflow_metadata"):
+        pairs.append(("Workflow Metadata", str(result["workflow_metadata"])))
     if result.get("final_message"):
         pairs.append(("Final Message", str(result["final_message"])))
     print_kv(pairs)
@@ -87,6 +89,25 @@ def _print_status(result: dict) -> None:
     if structured:
         console.print("\n[bold]Structured Output:[/bold]")
         print_json(structured)
+
+    files = result.get("file_metadata")
+    if files:
+        console.print("\n[bold]Files:[/bold]")
+        rows = []
+        for f in files:
+            size = f.get("file_size", 0)
+            if size >= 1_048_576:
+                size_str = f"{size / 1_048_576:.1f} MB"
+            elif size >= 1024:
+                size_str = f"{size / 1024:.1f} KB"
+            else:
+                size_str = f"{size} B"
+            rows.append([
+                f.get("filename", ""),
+                size_str,
+                f.get("download_timestamp", ""),
+            ])
+        print_table(["Filename", "Size", "Downloaded"], rows)
 
 
 @app.command("events")
