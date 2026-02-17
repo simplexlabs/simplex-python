@@ -10,7 +10,7 @@ from typing import Optional
 import typer
 
 from simplex.cli.config import make_client_kwargs
-from simplex.cli.output import console, print_error, print_json, print_kv, print_success, print_table
+from simplex.cli.output import console, print_error, print_json, print_kv, print_success
 
 app = typer.Typer(help="Inspect sessions.")
 
@@ -93,7 +93,6 @@ def _print_status(result: dict) -> None:
     files = result.get("file_metadata")
     if files:
         console.print("\n[bold]Files:[/bold]")
-        rows = []
         for f in files:
             size = f.get("file_size", 0)
             if size >= 1_048_576:
@@ -102,13 +101,13 @@ def _print_status(result: dict) -> None:
                 size_str = f"{size / 1024:.1f} KB"
             else:
                 size_str = f"{size} B"
-            rows.append([
-                f.get("filename", ""),
-                size_str,
-                f.get("download_timestamp", ""),
-                f.get("download_url", ""),
+            print_kv([
+                ("Filename", f.get("filename", "")),
+                ("Size", size_str),
+                ("Downloaded", f.get("download_timestamp", "")),
+                ("URL", f.get("download_url", "")),
             ])
-        print_table(["Filename", "Size", "Downloaded", "URL"], rows)
+            console.print()
 
 
 @app.command("events")
