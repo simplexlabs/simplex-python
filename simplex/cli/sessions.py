@@ -106,8 +106,9 @@ def _print_status(result: dict) -> None:
                 f.get("filename", ""),
                 size_str,
                 f.get("download_timestamp", ""),
+                f.get("download_url", ""),
             ])
-        print_table(["Filename", "Size", "Downloaded"], rows)
+        print_table(["Filename", "Size", "Downloaded", "URL"], rows)
 
 
 @app.command("events")
