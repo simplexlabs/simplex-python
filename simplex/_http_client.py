@@ -21,7 +21,7 @@ from simplex.errors import (
     ValidationError,
 )
 
-__version__ = "3.0.2"
+__version__ = "3.0.3"
 
 
 class HttpClient:
