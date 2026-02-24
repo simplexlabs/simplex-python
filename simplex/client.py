@@ -688,7 +688,7 @@ class SimplexClient:
             {'succeeded': True, 'name': 'github_token', 'credential_id': '...'}
         """
         try:
-            response: StoreCredentialResponse = self._http_client.post(
+            response: StoreCredentialResponse = self._http_client.post_json(
                 "/store_credential",
                 data={"name": name, "value": value},
             )
@@ -737,7 +737,7 @@ class SimplexClient:
             {'succeeded': True}
         """
         try:
-            response: DeleteCredentialResponse = self._http_client.post(
+            response: DeleteCredentialResponse = self._http_client.post_json(
                 "/delete_credential",
                 data={"name": name},
             )
