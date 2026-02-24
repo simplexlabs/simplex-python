@@ -13,12 +13,15 @@ from typing import Any
 from simplex._http_client import HttpClient
 from simplex.errors import WorkflowError
 from simplex.types import (
+    DeleteCredentialResponse,
+    ListCredentialsResponse,
     PauseSessionResponse,
     ResumeSessionResponse,
     RunWorkflowResponse,
     SearchWorkflowsResponse,
     SessionStatusResponse,
     StartEditorSessionResponse,
+    StoreCredentialResponse,
     UpdateWorkflowMetadataResponse,
 )
 
@@ -665,6 +668,84 @@ class SimplexClient:
             Dict with session_id, status, logs_url, message_url, vnc_url
         """
         return self._http_client.get(f"/workflow/{workflow_id}/active_session")
+
+    def store_credential(self, name: str, value: str) -> StoreCredentialResponse:
+        """
+        Store an encrypted credential for your organization.
+
+        The value is encrypted server-side and can later be used by the agent
+        via ``type_secret(credential_name="...")``.
+
+        Args:
+            name: A unique name for the credential
+            value: The plaintext value to encrypt and store
+
+        Returns:
+            StoreCredentialResponse with credential_id on success
+
+        Example:
+            >>> client.store_credential("github_token", "ghp_xxxx...")
+            {'succeeded': True, 'name': 'github_token', 'credential_id': '...'}
+        """
+        try:
+            response: StoreCredentialResponse = self._http_client.post(
+                "/store_credential",
+                data={"name": name, "value": value},
+            )
+            return response
+        except Exception as e:
+            if isinstance(e, WorkflowError):
+                raise
+            raise WorkflowError(f"Failed to store credential: {e}")
+
+    def list_credentials(self) -> ListCredentialsResponse:
+        """
+        List all encrypted credentials for your organization.
+
+        Returns metadata only (name, dates) -- not the encrypted values.
+
+        Returns:
+            ListCredentialsResponse with array of credential metadata
+
+        Example:
+            >>> result = client.list_credentials()
+            >>> for cred in result["credentials"]:
+            ...     print(f"{cred['name']} (created {cred['created_at']})")
+        """
+        try:
+            response: ListCredentialsResponse = self._http_client.get(
+                "/list_credentials",
+            )
+            return response
+        except Exception as e:
+            if isinstance(e, WorkflowError):
+                raise
+            raise WorkflowError(f"Failed to list credentials: {e}")
+
+    def delete_credential(self, name: str) -> DeleteCredentialResponse:
+        """
+        Delete an encrypted credential by name.
+
+        Args:
+            name: The name of the credential to delete
+
+        Returns:
+            DeleteCredentialResponse
+
+        Example:
+            >>> client.delete_credential("github_token")
+            {'succeeded': True}
+        """
+        try:
+            response: DeleteCredentialResponse = self._http_client.post(
+                "/delete_credential",
+                data={"name": name},
+            )
+            return response
+        except Exception as e:
+            if isinstance(e, WorkflowError):
+                raise
+            raise WorkflowError(f"Failed to delete credential: {e}")
 
     def close_session(self, session_id: str) -> Any:
         """

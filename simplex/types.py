@@ -182,6 +182,51 @@ class StartEditorSessionResponse(TypedDict, total=False):
     filesystem_url: str | None
 
 
+class StoreCredentialResponse(TypedDict, total=False):
+    """
+    Response from storing a credential.
+
+    Attributes:
+        succeeded: Whether the credential was stored successfully
+        name: The credential name
+        credential_id: The ID of the stored credential
+        error: Error message if the operation failed
+    """
+
+    succeeded: bool
+    name: str
+    credential_id: str
+    error: str
+
+
+class ListCredentialsResponse(TypedDict, total=False):
+    """
+    Response from listing credentials.
+
+    Attributes:
+        succeeded: Whether the list operation succeeded
+        credentials: List of credential metadata (id, name, created_at, updated_at)
+        error: Error message if the operation failed
+    """
+
+    succeeded: bool
+    credentials: list[dict[str, Any]]
+    error: str
+
+
+class DeleteCredentialResponse(TypedDict, total=False):
+    """
+    Response from deleting a credential.
+
+    Attributes:
+        succeeded: Whether the credential was deleted successfully
+        error: Error message if the operation failed
+    """
+
+    succeeded: bool
+    error: str
+
+
 class WebhookPayload(TypedDict, total=False):
     """
     Payload received from a Simplex webhook.
